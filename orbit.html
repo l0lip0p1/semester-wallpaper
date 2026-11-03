@@ -1,0 +1,621 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#000000">
+<title>Orbit</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Jost:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  color-scheme: dark;
+  --fit: 1;
+  --top-space: 20dvh;
+  --bottom-space: 19dvh;
+  box-sizing: border-box;
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { color-scheme: dark; } }
+:root[data-theme="dark"] { color-scheme: dark; }
+html { scroll-padding-top: env(safe-area-inset-top, 0px); }
+html, body { height: 100%; margin: 0; }
+body { overflow: hidden; user-select: none; -webkit-user-select: none; -webkit-tap-highlight-color: transparent; }
+#fx { position: fixed; inset: 0; z-index: 0; pointer-events: none; }
+#stage {
+  position: relative; z-index: 1;
+  height: 100%; max-width: 520px; margin: 0 auto;
+  box-sizing: border-box;
+  padding: var(--top-space) 6vw var(--bottom-space);
+  display: flex; flex-direction: column; justify-content: center;
+  gap: calc(3.2dvh * var(--fit));
+  transition: transform 6s linear;
+}
+#stage > * { flex-shrink: 0; }
+#night { position: fixed; inset: 0; z-index: 5; pointer-events: none; background: #000000; opacity: 0; transition: opacity 90s linear; }
+:root[data-power="saver"] *, :root[data-power="saver"] *::before, :root[data-power="saver"] *::after { animation-play-state: paused !important; }
+
+:root {
+  --ink: #ffffff;
+  --ink-2: rgba(255, 255, 255, 0.62);
+  --ink-3: rgba(255, 255, 255, 0.36);
+  --sys: calc(min(90vw, 41dvh, 470px) * var(--fit));
+  --moon: calc(min(11vw, 5.4dvh, 56px) * var(--fit));
+}
+body {
+  background: radial-gradient(120% 70% at 50% 46%, #0b1026 0%, #04060f 45%, #000000 72%);
+  color: var(--ink);
+  font-family: "Jost", "Futura", "Avenir Next", "Century Gothic", sans-serif;
+  font-weight: 300;
+  font-variant-numeric: tabular-nums;
+}
+.status { margin: 0; display: flex; align-items: center; justify-content: center; gap: 0.55em; font-size: clamp(12px, 3.3vw, 14px); font-weight: 400; color: var(--ink-2); }
+.status .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--c, #fff); opacity: 0.9; }
+.status.live { color: var(--ink); }
+.status.live .dot { box-shadow: 0 0 10px var(--c); animation: breathe 2s ease-in-out infinite; }
+
+.system { position: relative; width: var(--sys); height: var(--sys); margin: 0 auto; }
+.system svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.orbit { fill: none; stroke: rgba(255, 255, 255, 0.1); stroke-width: 0.4; }
+.trail { fill: none; stroke-width: 1.3; stroke-linecap: round; opacity: 0.5; }
+.planet { transition: r 0.6s ease; }
+.planet.live { filter: drop-shadow(0 0 2.2px currentColor); animation: breathe 2s ease-in-out infinite; }
+.label { font-size: 5.6px; paint-order: stroke; stroke: #02030a; stroke-width: 2.6px; stroke-linejoin: round; }
+.label .code { font-weight: 500; }
+.label .val { fill: rgba(255, 255, 255, 0.82); font-weight: 300; }
+.label .dec { fill: rgba(255, 255, 255, 0.5); font-size: 4.3px; }
+.sun-trk { fill: none; stroke: rgba(255, 255, 255, 0.12); stroke-width: 2; }
+.sun { fill: none; stroke: #ffffff; stroke-width: 2; stroke-linecap: round; }
+
+.core { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; pointer-events: none; }
+.core .lbl { font-size: calc(var(--sys) * 0.034); color: var(--ink-2); letter-spacing: 0.02em; }
+.core .num { display: flex; align-items: baseline; line-height: 1; margin: 0.12em 0 0.18em; white-space: nowrap; }
+.core .num .i { font-size: calc(var(--sys) * 0.14); font-weight: 300; letter-spacing: -0.02em; }
+.core .num .d { font-size: calc(var(--sys) * 0.04); color: var(--ink-2); }
+.core .num .u { font-size: calc(var(--sys) * 0.044); color: var(--ink-2); margin-left: 0.1em; }
+.core .left { font-size: calc(var(--sys) * 0.036); color: var(--ink); }
+.digits { white-space: pre; }
+.digits span { display: inline-block; width: 0.58em; text-align: center; }
+.digits span.pt { width: 0.28em; }
+.digits span.tx { display: inline; width: auto; }
+
+.all { margin: calc(-0.6dvh * var(--fit)) 0 0; text-align: center; font-size: clamp(12px, 3.3vw, 14px); color: var(--ink-2); }
+.all b { font-weight: 400; color: var(--ink); }
+
+h2 { margin: 0 0 calc(1.4dvh * var(--fit)); text-align: center; font-size: clamp(12px, 3.2vw, 14px); font-weight: 400; color: var(--ink-2); }
+.moons { display: flex; flex-wrap: wrap; justify-content: center; row-gap: calc(1.6dvh * var(--fit)); }
+.moon { width: 25%; text-align: center; }
+.moon svg { display: block; width: var(--moon); height: var(--moon); margin: 0 auto; overflow: visible; }
+.moon .trk { fill: none; stroke: rgba(255, 255, 255, 0.12); stroke-width: 6; }
+.moon .prog { fill: none; stroke: var(--c); stroke-width: 6; stroke-linecap: round; }
+.moon.deadline .trk { stroke-dasharray: 3 7; stroke-width: 4; stroke: rgba(255, 255, 255, 0.3); }
+.moon.deadline .prog { stroke-width: 4; }
+.moon .mc { margin-top: 0.55em; font-size: clamp(11px, 3vw, 13px); font-weight: 500; color: var(--c); }
+.moon .mt { margin-top: 0.1em; font-size: clamp(12px, 3.3vw, 14px); }
+.moon .mp { margin-top: 0.05em; font-size: clamp(9.5px, 2.6vw, 11px); color: var(--ink-3); white-space: nowrap; }
+.moon.done .mt { color: var(--ink-2); }
+.tbd { margin: calc(1.5dvh * var(--fit)) 0 0; text-align: center; font-size: clamp(11.5px, 3.1vw, 13px); color: var(--ink-2); }
+.tbd:empty { display: none; }
+
+@keyframes breathe { 0%, 100% { opacity: 1; } 50% { opacity: 0.55; } }
+@media (prefers-reduced-motion: reduce) { .planet.live, .status.live .dot { animation: none; } }
+</style>
+</head>
+<body>
+<canvas id="fx" aria-hidden="true"></canvas>
+
+<main id="stage">
+  <p class="status" id="status"><span class="dot"></span><span id="statusText"></span></p>
+
+  <div class="system" aria-label="Time until the exam session and progress of each course">
+    <svg id="sys" viewBox="0 0 200 200" aria-hidden="true">
+      <g id="orbits"></g>
+      <g id="labels"></g>
+    </svg>
+    <div class="core">
+      <div class="lbl">Road to exams</div>
+      <div class="num"><span class="i" id="hI"></span><span class="d digits" id="hD"></span><span class="u">%</span></div>
+      <div class="left digits" id="hLeft"></div>
+    </div>
+  </div>
+  <p class="all">All courses <b id="allPct"></b></p>
+
+  <section>
+    <h2>Exams and deadlines</h2>
+    <div class="moons" id="moons"></div>
+    <p class="tbd" id="tbd"></p>
+  </section>
+</main>
+
+<div id="night"></div>
+
+<script>
+/* =====================================================================
+   EDIT HERE: dates, timetable, exams, night mode
+   Dates: "YYYY-MM-DD" or "YYYY-MM-DDTHH:MM" (local time)
+   ===================================================================== */
+const CONFIG = {
+  countFrom: "2026-09-07T00:00",          // 0% point of every countdown
+  examSessionStart: "2027-01-11T00:00",   // the main ring reaches 100% here
+
+  firstClassDay: "2026-09-07",
+  lastClassDay: "2026-12-18",
+  noClassDays: ["2026-09-21"],                    // Jeune federal
+  noClassRanges: [["2026-10-19", "2026-10-23"]],  // autumn break
+
+  courses: {
+    AN:   { name: "Analysis I",                  color: "#8ecbff" },
+    AL:   { name: "Linear Algebra",              color: "#ff9ec7" },
+    AICC: { name: "AICC I",                      color: "#b8f28a" },
+    PHYS: { name: "General physics: mechanics",  color: "#ffc27a" },
+    PROG: { name: "Introduction to programming", color: "#c3a6ff" },
+  },
+
+  timetable: [
+    { day: "Mon", start: "10:15", end: "12:00", course: "AN",   type: "Lecture" },
+    { day: "Tue", start: "08:15", end: "10:00", course: "AICC", type: "Lecture" },
+    { day: "Tue", start: "10:15", end: "12:00", course: "PHYS", type: "Exercise" },
+    { day: "Tue", start: "15:15", end: "17:00", course: "AL",   type: "Lecture" },
+    { day: "Wed", start: "10:15", end: "12:00", course: "AN",   type: "Lecture" },
+    { day: "Wed", start: "13:15", end: "14:00", course: "PROG", type: "Lecture" },
+    { day: "Wed", start: "14:15", end: "15:00", course: "PROG", type: "Lecture" },
+    { day: "Wed", start: "15:15", end: "17:00", course: "AICC", type: "Lecture" },
+    { day: "Wed", start: "17:15", end: "19:00", course: "PHYS", type: "Lecture" },
+    { day: "Thu", start: "08:15", end: "10:00", course: "AL",   type: "Lecture" },
+    { day: "Thu", start: "10:15", end: "12:00", course: "AN",   type: "Exercise" },
+    { day: "Thu", start: "12:15", end: "14:00", course: "PHYS", type: "Lecture" },
+    { day: "Fri", start: "08:15", end: "10:00", course: "AL",   type: "Exercise" },
+    { day: "Fri", start: "10:15", end: "12:00", course: "AICC", type: "Exercise" },
+    { day: "Fri", start: "13:15", end: "15:00", course: "PROG", type: "Exercise" },
+    { day: "Fri", start: "15:15", end: "16:00", course: "PROG", type: "Lab" },
+  ],
+
+  // date: null means "date not known yet"
+  exams: [
+    { label: "PROG", course: "PROG", date: "2026-12-12T09:00" },                      // exam 09:00-12:00
+    { label: "PROJ", course: "PROG", date: "2026-12-17T13:00", kind: "deadline" },    // project submission
+    { label: "DEF",  course: "PROG", date: "2026-12-18T08:00", kind: "deadline" },    // project defense (time TBD)
+    { label: "PHYS", course: "PHYS", date: "2027-01-15T08:00" },                      // exam 08:00-11:30
+    { label: "AN",   course: "AN",   date: null },
+    { label: "AL",   course: "AL",   date: null },
+    { label: "AICC", course: "AICC", date: null },
+  ],
+  tbdText: "in January",
+
+  nightDim: { from: "23:00", to: "07:00", brightness: 0.45 },
+  decimals: { big: 6, live: 6, small: 2, exams: 5 },  // live = the course you are in right now
+  particles: 60,
+
+  // free space left for the lock screen clock (top) and charging text / shortcuts (bottom)
+  layout: { topSpace: "20dvh", bottomSpace: "19dvh" },
+};
+/* ===================================================================== */
+
+/* ---------- core: schedule, timing, battery, night and layout (same in every design) ---------- */
+const Core = (() => {
+  "use strict";
+  const root = document.documentElement;
+  const $ = (id) => document.getElementById(id);
+  const TAU = Math.PI * 2;
+  const pad = (n) => String(n).padStart(2, "0");
+  const clamp01 = (x) => Math.min(1, Math.max(0, x));
+  const DAYNUM = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
+  const SDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  const SMONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  root.style.setProperty("--top-space", CONFIG.layout.topSpace);
+  root.style.setProperty("--bottom-space", CONFIG.layout.bottomSpace);
+
+  function toTime(s) {
+    const [d, t] = s.split("T");
+    const [y, m, dd] = d.split("-").map(Number);
+    const [hh, mm] = (t || "00:00").split(":").map(Number);
+    return new Date(y, m - 1, dd, hh, mm, 0, 0).getTime();
+  }
+  const ymd = (dt) => `${dt.getFullYear()}-${pad(dt.getMonth() + 1)}-${pad(dt.getDate())}`;
+  const hm = (t) => { const d = new Date(t); return `${pad(d.getHours())}:${pad(d.getMinutes())}`; };
+  const shortDate = (t) => { const d = new Date(t); return `${d.getDate()} ${SMONTHS[d.getMonth()]}`; };
+
+  /* schedule */
+  const START = toTime(CONFIG.countFrom);
+  const SESSION = toTime(CONFIG.examSessionStart);
+  const off = new Set(CONFIG.noClassDays);
+  for (const [a, b] of CONFIG.noClassRanges) {
+    const d = new Date(toTime(a)); const end = toTime(b);
+    while (d.getTime() <= end) { off.add(ymd(d)); d.setDate(d.getDate() + 1); }
+  }
+  const sessions = [];
+  {
+    const d = new Date(toTime(CONFIG.firstClassDay));
+    const last = toTime(CONFIG.lastClassDay);
+    while (d.getTime() <= last) {
+      if (!off.has(ymd(d))) {
+        for (const s of CONFIG.timetable) {
+          if (DAYNUM[s.day] !== d.getDay()) continue;
+          const [sh, sm] = s.start.split(":").map(Number);
+          const [eh, em] = s.end.split(":").map(Number);
+          sessions.push({
+            course: s.course, type: s.type,
+            start: new Date(d.getFullYear(), d.getMonth(), d.getDate(), sh, sm).getTime(),
+            end: new Date(d.getFullYear(), d.getMonth(), d.getDate(), eh, em).getTime(),
+          });
+        }
+      }
+      d.setDate(d.getDate() + 1);
+    }
+  }
+  sessions.sort((a, b) => a.start - b.start);
+  const totals = {};
+  for (const s of sessions) totals[s.course] = (totals[s.course] || 0) + (s.end - s.start);
+  function courseProgress(code, now) {
+    let done = 0;
+    for (const s of sessions) {
+      if (s.course !== code) continue;
+      if (now >= s.end) done += s.end - s.start;
+      else if (now > s.start) done += now - s.start;
+    }
+    return totals[code] ? done / totals[code] : 0;
+  }
+
+  /* exams */
+  const examList = CONFIG.exams
+    .map((x, idx) => ({ ...x, idx, t: x.date ? toTime(x.date) : null }))
+    .sort((a, b) => (a.t === null || b.t === null) ? (a.t === null) - (b.t === null) || a.idx - b.idx : a.t - b.t);
+  const dated = examList.filter((x) => x.t !== null);
+  const tbd = examList.filter((x) => x.t === null).map((x) => x.label);
+  const tbdText = !tbd.length ? "" :
+    `${tbd.length > 1 ? `${tbd.slice(0, -1).join(", ")} and ${tbd[tbd.length - 1]}` : tbd[0]} ${tbd.length > 1 ? "exams: dates" : "exam: date"} ${CONFIG.tbdText}`;
+
+  /* status line */
+  function whenLabel(t, now) {
+    const d = new Date(t), n = new Date(now);
+    const diff = Math.round((new Date(d.getFullYear(), d.getMonth(), d.getDate()) - new Date(n.getFullYear(), n.getMonth(), n.getDate())) / 86400000);
+    if (diff === 0) return `today ${hm(t)}`;
+    if (diff === 1) return `tomorrow ${hm(t)}`;
+    if (diff < 7) return `${SDAYS[d.getDay()]} ${hm(t)}`;
+    return `${SDAYS[d.getDay()]} ${shortDate(t)}, ${hm(t)}`;
+  }
+  function status(now, live) {
+    if (live) return { live: true, code: live.course, text: `${live.course} ${live.type.toLowerCase()} until ${hm(live.end)}` };
+    const next = sessions.find((s) => s.start > now);
+    if (next) return { live: false, code: next.course, text: `Next: ${next.course} ${next.type.toLowerCase()}, ${whenLabel(next.start, now)}` };
+    if (now < SESSION) return { live: false, code: null, text: `Classes are over. Exams start ${shortDate(SESSION)}.` };
+    return { live: false, code: null, text: "Exam session. Good luck." };
+  }
+
+  /* one snapshot of everything a design shows */
+  function state(now) {
+    const live = sessions.find((s) => now >= s.start && now < s.end) || null;
+    const courses = Object.keys(CONFIG.courses).map((code) => ({
+      code, name: CONFIG.courses[code].name, color: CONFIG.courses[code].color,
+      p: courseProgress(code, now), live: !!live && live.course === code,
+    }));
+    return {
+      now, live,
+      session: clamp01((now - START) / (SESSION - START)),
+      sessionLeft: SESSION - now,
+      courses,
+      all: courses.reduce((a, c) => a + c.p, 0) / courses.length,
+      exams: dated.map((x) => ({
+        label: x.label, course: x.course, kind: x.kind || "exam", t: x.t,
+        p: clamp01((now - START) / (x.t - START)), left: x.t - now, done: now >= x.t,
+      })),
+      status: status(now, live),
+    };
+  }
+
+  /* number helpers */
+  function pct(p, dec) {
+    if (p >= 1) return ["100", ""];
+    const v = (clamp01(p) * 100).toFixed(dec);
+    const k = v.indexOf(".");
+    return k < 0 ? [v, ""] : [v.slice(0, k), v.slice(k)];
+  }
+  function parts(ms) {
+    let s = Math.max(0, Math.floor(ms / 1000));
+    const d = Math.floor(s / 86400); s %= 86400;
+    const h = Math.floor(s / 3600); s %= 3600;
+    return { d, h, m: Math.floor(s / 60), s: s % 60 };
+  }
+  function short(ms) {
+    const { d, h, m } = parts(ms);
+    if (d > 0) return `${d} d ${h} h`;
+    if (h > 0) return `${h} h ${pad(m)} m`;
+    return `${m} m`;
+  }
+  const setText = (el, t) => { if (el && el.textContent !== t) el.textContent = t; };
+  // fixed-width digits, so ticking numbers never wobble whatever the font
+  function setDigits(el, str) {
+    if (!el || el._s === str) return;
+    el._s = str;
+    while (el.children.length < str.length) el.appendChild(document.createElement("span"));
+    while (el.children.length > str.length) el.lastChild.remove();
+    for (let i = 0; i < str.length; i++) {
+      const c = el.children[i];
+      if (c.textContent !== str[i]) { c.textContent = str[i]; c.className = /[0-9]/.test(str[i]) ? "" : str[i] === "." ? "pt" : "tx"; }
+    }
+  }
+  function ring(svgParent, r, cls) {
+    const ns = "http://www.w3.org/2000/svg";
+    const C = TAU * r;
+    const c = document.createElementNS(ns, "circle");
+    c.setAttribute("cx", "60"); c.setAttribute("cy", "60"); c.setAttribute("r", String(r));
+    c.setAttribute("class", cls);
+    if (cls.includes("prog")) { c.setAttribute("stroke-dasharray", `${C} ${C}`); c.setAttribute("stroke-dashoffset", String(C)); }
+    svgParent.appendChild(c);
+    return { el: c, C, last: -1 };
+  }
+  function setArc(a, p) {
+    if (Math.abs(p - a.last) < 0.0006 && !(p >= 1 && a.last < 1)) return;
+    a.last = p;
+    a.el.setAttribute("stroke-dashoffset", (a.C * (1 - p)).toFixed(3));
+    a.el.style.visibility = p <= 0 ? "hidden" : "visible";
+  }
+
+  /* battery mode from the app: full, eco or saver */
+  let power = (window.__power && window.__power.mode) || "full";
+  root.dataset.power = power;
+  window.addEventListener("wallpaper-power", (e) => {
+    power = (e.detail && e.detail.mode) || "full";
+    root.dataset.power = power;
+  });
+  const share = () => (power === "saver" ? 0.2 : power === "eco" ? 0.5 : 1);
+
+  /* night */
+  let night = null;
+  const minutesOf = (s) => { const [h, m] = s.split(":").map(Number); return h * 60 + m; };
+  function updateNight(d) {
+    const m = d.getHours() * 60 + d.getMinutes();
+    const f = minutesOf(CONFIG.nightDim.from), t = minutesOf(CONFIG.nightDim.to);
+    const n = f > t ? (m >= f || m < t) : (m >= f && m < t);
+    if (n !== night) {
+      night = n;
+      root.classList.toggle("night", n);
+      $("night").style.opacity = n ? String(1 - CONFIG.nightDim.brightness) : "0";
+    }
+  }
+  const frameSkip = () => (power === "saver" ? 4 : power === "eco" || night ? 2 : 1);
+  const tickMs = () => (power === "saver" ? 500 : night ? 400 : power === "eco" ? 120 : 60);
+
+  /* slow drift against screen burn-in */
+  const driftAt = (t) => [Math.sin(t / 173) * 7, Math.cos(t / 241) * 9];
+
+  const reduce = !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+
+  function start(design) {
+    const stage = $("stage");
+    const cvs = $("fx");
+    const ctx = cvs.getContext("2d");
+    let W = 0, H = 0;
+
+    function fit() {
+      const cs = getComputedStyle(stage);
+      const kids = [...stage.children];
+      const used = () => kids.reduce((h, k) => h + k.offsetHeight, 0) + parseFloat(cs.rowGap || 0) * (kids.length - 1);
+      const avail = stage.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom);
+      let f = 1;
+      root.style.setProperty("--fit", "1");
+      while (f > 0.6 && used() > avail) { f -= 0.03; root.style.setProperty("--fit", f.toFixed(2)); }
+    }
+    function resize() {
+      const dpr = Math.min(2, window.devicePixelRatio || 1);
+      W = window.innerWidth; H = window.innerHeight;
+      cvs.width = Math.round(W * dpr); cvs.height = Math.round(H * dpr);
+      cvs.style.width = W + "px"; cvs.style.height = H + "px";
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      fit();
+      if (design.resize) design.resize(W, H);
+      if (design.measure) design.measure();
+    }
+    function drift() {
+      const [dx, dy] = driftAt(Date.now() / 1000);
+      stage.style.transform = `translate(${dx.toFixed(1)}px, ${dy.toFixed(1)}px)`;
+    }
+
+    design.setup(state(Date.now()));
+    let lastSecond = -1;
+    (function loop() {
+      const now = Date.now();
+      const st = state(now);
+      const sec = Math.floor(now / 1000);
+      if (sec !== lastSecond) { lastSecond = sec; updateNight(new Date(now)); }
+      design.update(st);
+      setTimeout(loop, tickMs());
+    })();
+
+    let last = 0, frameNo = 0;
+    function frame(ts) {
+      requestAnimationFrame(frame);
+      frameNo++;
+      if (frameNo % frameSkip()) return;
+      const dt = last ? Math.min(0.05, (ts - last) / 1000) : 0.016;
+      last = ts;
+      if (!W) return;
+      ctx.clearRect(0, 0, W, H);
+      ctx.globalAlpha = 1;
+      design.frame(ctx, dt, ts / 1000, W, H);
+      ctx.globalAlpha = 1;
+    }
+
+    drift(); setInterval(drift, 6000);
+    resize();
+    window.addEventListener("resize", resize);
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { fit(); if (design.measure) design.measure(); });
+    if (design.measure) setInterval(design.measure, 1000);
+    requestAnimationFrame(frame);
+  }
+
+  return {
+    $, TAU, pad, clamp01, shortDate, hm, pct, parts, short, setText, setDigits, ring, setArc, tbdText,
+    start, driftAt, share, reduce,
+    get power() { return power; },
+    get night() { return !!night; },
+  };
+})();
+
+/* ---------- Orbit: each course is a planet; how far it has travelled is how far the course is ---------- */
+(() => {
+  "use strict";
+  const C = Core, $ = C.$, ns = "http://www.w3.org/2000/svg";
+  const R0 = 38, RS = [50, 60, 70, 80, 90];
+  const el = (tag, attrs, parent) => {
+    const e = document.createElementNS(ns, tag);
+    for (const k in attrs) e.setAttribute(k, attrs[k]);
+    if (parent) parent.appendChild(e);
+    return e;
+  };
+  let sun, sunTip, planets = [], moons = [];
+  let liveAt = null, tipAt = null;
+  let session = 0;
+  const stars = [], meteors = [], sparks = [];
+  let meteorIn = 8;
+
+  const design = {
+    setup(st) {
+      const og = $("orbits"), lg = $("labels");
+      const rot = el("g", { transform: "rotate(-90 100 100)" }, og);
+      el("circle", { cx: 100, cy: 100, r: R0, class: "sun-trk" }, rot);
+      const sc = C.TAU * R0;
+      sun = { el: el("circle", { cx: 100, cy: 100, r: R0, class: "sun", "stroke-dasharray": `${sc} ${sc}`, "stroke-dashoffset": sc }, rot), C: sc, last: -1 };
+      sunTip = el("circle", { r: 1.6, fill: "#ffffff" }, rot);
+      st.courses.forEach((c, i) => {
+        const r = RS[i];
+        el("circle", { cx: 100, cy: 100, r, class: "orbit" }, rot);
+        const tc = C.TAU * r;
+        const trail = { el: el("circle", { cx: 100, cy: 100, r, class: "trail", stroke: c.color, "stroke-dasharray": `${tc} ${tc}`, "stroke-dashoffset": tc }, rot), C: tc, last: -1 };
+        const planet = el("circle", { r: 2.5, fill: c.color, class: "planet", style: `color:${c.color}` }, rot);
+        const label = el("text", { x: 96.5, y: 100 - r + 2, "text-anchor": "end", class: "label" }, lg);
+        const code = el("tspan", { class: "code", fill: c.color }, label); code.textContent = c.code + " ";
+        const val = el("tspan", { class: "val" }, label);
+        const dec = el("tspan", { class: "dec" }, label);
+        planets.push({ code: c.code, r, trail, planet, val, dec, color: c.color });
+      });
+      for (const x of st.exams) {
+        const color = (CONFIG.courses[x.course] || {}).color || "#ffffff";
+        const m = document.createElement("div");
+        m.className = "moon" + (x.kind === "deadline" ? " deadline" : "");
+        m.style.setProperty("--c", color);
+        m.innerHTML = `<svg viewBox="0 0 120 120" aria-hidden="true"><g transform="rotate(-90 60 60)"></g></svg><div class="mc">${x.label}</div><div class="mt"></div><div class="mp"></div>`;
+        const g = m.querySelector("g");
+        C.ring(g, 50, "trk");
+        moons.push({ el: m, arc: C.ring(g, 50, "prog"), mt: m.querySelector(".mt"), mp: m.querySelector(".mp") });
+        $("moons").appendChild(m);
+      }
+      C.setText($("tbd"), C.tbdText);
+    },
+
+    update(st) {
+      session = st.session;
+      C.setArc(sun, st.session);
+      const a0 = st.session * C.TAU;
+      sunTip.setAttribute("cx", (100 + R0 * Math.cos(a0)).toFixed(2));
+      sunTip.setAttribute("cy", (100 + R0 * Math.sin(a0)).toFixed(2));
+      const [i, d] = C.pct(st.session, CONFIG.decimals.big);
+      C.setText($("hI"), i); C.setDigits($("hD"), d);
+      const t = C.parts(st.sessionLeft);
+      C.setDigits($("hLeft"), `${t.d}d ${C.pad(t.h)}h ${C.pad(t.m)}m ${C.pad(t.s)}s`);
+
+      st.courses.forEach((c, k) => {
+        const p = planets[k];
+        C.setArc(p.trail, c.p);
+        const a = c.p * C.TAU;
+        p.planet.setAttribute("cx", (100 + p.r * Math.cos(a)).toFixed(2));
+        p.planet.setAttribute("cy", (100 + p.r * Math.sin(a)).toFixed(2));
+        p.planet.setAttribute("r", c.live ? "3.4" : "2.5");
+        p.planet.classList.toggle("live", c.live);
+        const [ci, cd] = C.pct(c.p, c.live ? CONFIG.decimals.live : CONFIG.decimals.small);
+        C.setText(p.val, ci); C.setText(p.dec, cd + "%");
+        p.angle = a; p.live = c.live;
+      });
+      const [ai, ad] = C.pct(st.all, CONFIG.decimals.small);
+      C.setText($("allPct"), `${ai}${ad}%`);
+
+      st.exams.forEach((x, k) => {
+        const m = moons[k];
+        C.setArc(m.arc, x.p);
+        m.el.classList.toggle("done", x.done);
+        C.setText(m.mt, x.done ? "Done" : C.short(x.left));
+        const [xi, xd] = C.pct(x.p, CONFIG.decimals.exams);
+        C.setText(m.mp, `${xi}${xd}%`);
+      });
+
+      const s = $("status");
+      s.classList.toggle("live", st.status.live);
+      s.style.setProperty("--c", st.status.code ? CONFIG.courses[st.status.code].color : "#ffffff");
+      C.setText($("statusText"), st.status.text);
+    },
+
+    measure() {
+      const r = $("sys").getBoundingClientRect();
+      const k = r.width / 200, cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+      const a0 = -Math.PI / 2 + session * C.TAU;
+      tipAt = { x: cx + Math.cos(a0) * R0 * k, y: cy + Math.sin(a0) * R0 * k };
+      const lp = planets.find((p) => p.live);
+      liveAt = lp ? { x: cx + Math.cos(lp.angle - Math.PI / 2) * lp.r * k, y: cy + Math.sin(lp.angle - Math.PI / 2) * lp.r * k, color: lp.color } : null;
+    },
+
+    resize(W, H) {
+      stars.length = 0;
+      const n = Math.round((W * H) / 900);
+      for (let k = 0; k < n; k++) {
+        stars.push({ x: Math.random() * W, y: Math.random() * H, r: 0.3 + Math.random() ** 3 * 1.2, a: 0.25 + Math.random() * 0.6, tw: 0.3 + Math.random() * 1.6, ph: Math.random() * C.TAU, warm: Math.random() < 0.15 });
+      }
+    },
+
+    frame(ctx, dt, t, W, H) {
+      const share = C.share();
+      const [dx, dy] = C.driftAt(Date.now() / 1000);
+      // stars, parallax with the drift
+      const n = Math.round(stars.length * share);
+      for (let k = 0; k < n; k++) {
+        const s = stars[k];
+        ctx.globalAlpha = s.a * (0.6 + 0.4 * Math.sin(t * s.tw + s.ph));
+        ctx.fillStyle = s.warm ? "#ffe2bd" : "#dfe8ff";
+        ctx.beginPath();
+        ctx.arc(s.x + dx * 0.4, s.y + dy * 0.4, s.r, 0, C.TAU);
+        ctx.fill();
+      }
+      // a shooting star now and then
+      if (C.power !== "saver" && !C.reduce) {
+        meteorIn -= dt;
+        if (meteorIn <= 0) {
+          meteorIn = 14 + Math.random() * 22;
+          const x = W * (0.35 + Math.random() * 0.65), y = H * Math.random() * 0.35;
+          meteors.push({ x, y, vx: -(260 + Math.random() * 160), vy: 120 + Math.random() * 80, t: 0, life: 0.9 });
+        }
+      }
+      for (let k = meteors.length - 1; k >= 0; k--) {
+        const m = meteors[k];
+        m.t += dt;
+        if (m.t > m.life) { meteors.splice(k, 1); continue; }
+        m.x += m.vx * dt; m.y += m.vy * dt;
+        const q = Math.sin(Math.PI * m.t / m.life);
+        const g = ctx.createLinearGradient(m.x, m.y, m.x - m.vx * 0.22, m.y - m.vy * 0.22);
+        g.addColorStop(0, "rgba(255,255,255,0.9)");
+        g.addColorStop(1, "rgba(255,255,255,0)");
+        ctx.globalAlpha = q;
+        ctx.strokeStyle = g; ctx.lineWidth = 1.2;
+        ctx.beginPath(); ctx.moveTo(m.x, m.y); ctx.lineTo(m.x - m.vx * 0.22, m.y - m.vy * 0.22); ctx.stroke();
+      }
+      // stardust around the course you are in, and off the tip of the inner ring
+      if (C.power !== "saver" && !C.reduce) {
+        if (liveAt && Math.random() < dt * 14) sparks.push({ x: liveAt.x, y: liveAt.y, vx: (Math.random() - 0.5) * 30, vy: (Math.random() - 0.5) * 30, t: 0, life: 1 + Math.random(), c: liveAt.color });
+        if (tipAt && session > 0 && session < 1 && Math.random() < dt * 4) sparks.push({ x: tipAt.x, y: tipAt.y, vx: (Math.random() - 0.5) * 18, vy: (Math.random() - 0.5) * 18, t: 0, life: 1.2 + Math.random(), c: "#ffffff" });
+      }
+      for (let k = sparks.length - 1; k >= 0; k--) {
+        const s = sparks[k];
+        s.t += dt;
+        if (s.t > s.life) { sparks.splice(k, 1); continue; }
+        s.x += s.vx * dt; s.y += s.vy * dt;
+        ctx.globalAlpha = 0.85 * (1 - s.t / s.life);
+        ctx.fillStyle = s.c;
+        ctx.beginPath(); ctx.arc(s.x, s.y, 0.9, 0, C.TAU); ctx.fill();
+      }
+    },
+  };
+  Core.start(design);
+})();
+</script>
+</body>
+</html>

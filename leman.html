@@ -1,0 +1,617 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0a1830">
+<title>Léman</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;1,9..144,300&family=Figtree:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  color-scheme: dark;
+  --fit: 1;
+  --top-space: 20dvh;
+  --bottom-space: 19dvh;
+  box-sizing: border-box;
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { color-scheme: dark; } }
+:root[data-theme="dark"] { color-scheme: dark; }
+html { scroll-padding-top: env(safe-area-inset-top, 0px); }
+html, body { height: 100%; margin: 0; }
+body { overflow: hidden; user-select: none; -webkit-user-select: none; -webkit-tap-highlight-color: transparent; }
+#fx { position: fixed; inset: 0; z-index: 0; pointer-events: none; }
+#stage {
+  position: relative; z-index: 1;
+  height: 100%; max-width: 520px; margin: 0 auto;
+  box-sizing: border-box;
+  padding: var(--top-space) 6vw var(--bottom-space);
+  display: flex; flex-direction: column; justify-content: center;
+  gap: calc(3.2dvh * var(--fit));
+  transition: transform 6s linear;
+}
+#stage > * { flex-shrink: 0; }
+#night { position: fixed; inset: 0; z-index: 5; pointer-events: none; background: #000000; opacity: 0; transition: opacity 90s linear; }
+:root[data-power="saver"] *, :root[data-power="saver"] *::before, :root[data-power="saver"] *::after { animation-play-state: paused !important; }
+
+:root {
+  --ink: #f2f7f8;
+  --ink-2: rgba(226, 240, 244, 0.66);
+  --ink-3: rgba(226, 240, 244, 0.4);
+  --water: #bfe6ee;
+  --warm: #ffc3a0;
+  --track: rgba(191, 230, 238, 0.16);
+  --hero: calc(min(62vw, 29dvh, 320px) * var(--fit));
+  --ring: calc(min(11vw, 5.2dvh, 54px) * var(--fit));
+}
+body {
+  background: #04101a;
+  color: var(--ink);
+  font-family: "Figtree", "Avenir Next", "Segoe UI", sans-serif;
+  font-variant-numeric: tabular-nums;
+}
+/* sky over the lake: dusk by day, deep blue at night */
+.sky { position: fixed; inset: 0; z-index: 0; pointer-events: none; transition: opacity 90s linear; }
+.sky.day {
+  background:
+    radial-gradient(90% 22% at 50% 31%, rgba(255, 176, 140, 0.30), rgba(255, 176, 140, 0) 70%),
+    linear-gradient(180deg, #0d1638 0%, #1d2350 17%, #3a3060 25%, #6a4a6c 29.5%, #123247 30.5%, #0b2636 46%, #061823 70%, #030c12 100%);
+}
+.sky.dusk {
+  opacity: 0;
+  background:
+    radial-gradient(70% 16% at 50% 31%, rgba(150, 190, 255, 0.10), rgba(150, 190, 255, 0) 70%),
+    linear-gradient(180deg, #02040c 0%, #050a1c 22%, #0b1430 29.5%, #06121c 30.5%, #030a10 60%, #000000 100%);
+}
+:root.night .sky.dusk { opacity: 1; }
+#fx { z-index: 1; }
+#stage { z-index: 2; gap: calc(3.4dvh * var(--fit)); }
+
+.status { margin: 0; text-align: center; font-size: clamp(12px, 3.3vw, 14px); font-weight: 500; color: var(--ink-2); }
+.status b { font-weight: 500; color: var(--ink); }
+.status.live b { color: var(--warm); }
+
+.hero { position: relative; width: var(--hero); height: var(--hero); margin: 0 auto; }
+.hero svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.hero .trk { fill: none; stroke: var(--track); stroke-width: 1.6; }
+.hero .prog { fill: none; stroke: var(--water); stroke-width: 1.6; stroke-linecap: round; }
+.hero .sun { fill: var(--warm); filter: drop-shadow(0 0 3px rgba(255, 195, 160, 0.9)); }
+.ripple { position: absolute; inset: 0; border-radius: 50%; border: 1px solid rgba(191, 230, 238, 0.35); opacity: 0; animation: ripple 9s linear infinite; }
+.ripple:nth-child(2) { animation-delay: 3s; }
+.ripple:nth-child(3) { animation-delay: 6s; }
+@keyframes ripple { 0% { transform: scale(1); opacity: 0.5; } 100% { transform: scale(1.55); opacity: 0; } }
+.hero .in { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
+.hero .lbl { font-size: calc(var(--hero) * 0.052); color: var(--ink-2); }
+.hero .num { display: flex; align-items: baseline; margin: 0.1em 0 0.15em; line-height: 1; white-space: nowrap; font-family: "Fraunces", Georgia, serif; font-weight: 300; }
+.hero .num .i { font-size: calc(var(--hero) * 0.27); font-variation-settings: "opsz" 144; letter-spacing: -0.02em; }
+.hero .num .d { font-size: calc(var(--hero) * 0.072); font-style: italic; color: var(--ink-2); }
+.hero .num .u { font-size: calc(var(--hero) * 0.072); font-style: italic; color: var(--ink-2); margin-left: 0.08em; }
+.hero .left { font-size: calc(var(--hero) * 0.055); color: var(--ink); }
+.digits { white-space: pre; }
+.digits span { display: inline-block; width: 0.56em; text-align: center; }
+.digits span.pt { width: 0.26em; }
+.digits span.tx { display: inline; width: auto; }
+
+h2 { margin: 0 0 calc(1.3dvh * var(--fit)); text-align: center; font-family: "Fraunces", Georgia, serif; font-style: italic; font-weight: 300; font-size: clamp(14px, 3.9vw, 17px); color: var(--ink-2); }
+.rings { display: grid; grid-template-columns: repeat(6, 1fr); }
+.r { text-align: center; }
+.r svg { display: block; width: var(--ring); height: var(--ring); margin: 0 auto; overflow: visible; }
+.r .trk { fill: none; stroke: var(--track); stroke-width: 5; }
+.r .prog { fill: none; stroke: var(--water); stroke-width: 5; stroke-linecap: round; }
+.r.all .prog { stroke: #ffffff; }
+.r.live .prog { stroke: var(--warm); }
+.r .c { margin-top: 0.55em; font-size: clamp(10.5px, 2.9vw, 12.5px); font-weight: 500; color: var(--ink-2); }
+.r.live .c { color: var(--warm); }
+.r .v { margin-top: 0.1em; font-size: clamp(11px, 3vw, 13px); white-space: nowrap; }
+.r .v small { font-size: 0.72em; color: var(--ink-3); }
+.r.live .v small { color: var(--warm); }
+
+.list { display: grid; gap: calc(0.9dvh * var(--fit)); max-width: 330px; margin: 0 auto; }
+.row { display: grid; grid-template-columns: 3.4em 3.8em 1fr auto; align-items: baseline; column-gap: 0.8em; font-size: clamp(12px, 3.3vw, 14px); white-space: nowrap; }
+.row .c { font-weight: 500; }
+.row .dt { color: var(--ink-3); }
+.row .p { text-align: right; color: var(--ink-2); font-size: 0.86em; }
+.row .p small { font-size: 0.8em; color: var(--ink-3); }
+.row.deadline .c { font-weight: 400; color: var(--ink-2); }
+.row.done { opacity: 0.5; }
+.tbd { margin: calc(1.2dvh * var(--fit)) 0 0; text-align: center; font-size: clamp(11.5px, 3.1vw, 13px); color: var(--ink-3); }
+.tbd:empty { display: none; }
+@media (prefers-reduced-motion: reduce) { .ripple { animation: none; } }
+</style>
+</head>
+<body>
+<div class="sky day" aria-hidden="true"></div>
+<div class="sky dusk" aria-hidden="true"></div>
+<canvas id="fx" aria-hidden="true"></canvas>
+
+<main id="stage">
+  <p class="status" id="status"></p>
+
+  <div class="hero" aria-label="Time until the exam session">
+    <div class="ripple"></div><div class="ripple"></div><div class="ripple"></div>
+    <svg id="heroSvg" viewBox="0 0 120 120" aria-hidden="true"><g id="heroG" transform="rotate(-90 60 60)"></g></svg>
+    <div class="in">
+      <div class="lbl">Road to exams</div>
+      <div class="num"><span class="i" id="hI"></span><span class="d digits" id="hD"></span><span class="u">%</span></div>
+      <div class="left digits" id="hLeft"></div>
+    </div>
+  </div>
+
+  <section>
+    <h2>Courses</h2>
+    <div class="rings" id="rings"></div>
+  </section>
+
+  <section>
+    <h2>Exams and deadlines</h2>
+    <div class="list" id="list"></div>
+    <p class="tbd" id="tbd"></p>
+  </section>
+</main>
+
+<div id="night"></div>
+
+<script>
+/* =====================================================================
+   EDIT HERE: dates, timetable, exams, night mode
+   Dates: "YYYY-MM-DD" or "YYYY-MM-DDTHH:MM" (local time)
+   ===================================================================== */
+const CONFIG = {
+  countFrom: "2026-09-07T00:00",          // 0% point of every countdown
+  examSessionStart: "2027-01-11T00:00",   // the main ring reaches 100% here
+
+  firstClassDay: "2026-09-07",
+  lastClassDay: "2026-12-18",
+  noClassDays: ["2026-09-21"],                    // Jeune federal
+  noClassRanges: [["2026-10-19", "2026-10-23"]],  // autumn break
+
+  courses: {
+    AN:   { name: "Analysis I",                  color: "#8ecbff" },
+    AL:   { name: "Linear Algebra",              color: "#ff9ec7" },
+    AICC: { name: "AICC I",                      color: "#b8f28a" },
+    PHYS: { name: "General physics: mechanics",  color: "#ffc27a" },
+    PROG: { name: "Introduction to programming", color: "#c3a6ff" },
+  },
+
+  timetable: [
+    { day: "Mon", start: "10:15", end: "12:00", course: "AN",   type: "Lecture" },
+    { day: "Tue", start: "08:15", end: "10:00", course: "AICC", type: "Lecture" },
+    { day: "Tue", start: "10:15", end: "12:00", course: "PHYS", type: "Exercise" },
+    { day: "Tue", start: "15:15", end: "17:00", course: "AL",   type: "Lecture" },
+    { day: "Wed", start: "10:15", end: "12:00", course: "AN",   type: "Lecture" },
+    { day: "Wed", start: "13:15", end: "14:00", course: "PROG", type: "Lecture" },
+    { day: "Wed", start: "14:15", end: "15:00", course: "PROG", type: "Lecture" },
+    { day: "Wed", start: "15:15", end: "17:00", course: "AICC", type: "Lecture" },
+    { day: "Wed", start: "17:15", end: "19:00", course: "PHYS", type: "Lecture" },
+    { day: "Thu", start: "08:15", end: "10:00", course: "AL",   type: "Lecture" },
+    { day: "Thu", start: "10:15", end: "12:00", course: "AN",   type: "Exercise" },
+    { day: "Thu", start: "12:15", end: "14:00", course: "PHYS", type: "Lecture" },
+    { day: "Fri", start: "08:15", end: "10:00", course: "AL",   type: "Exercise" },
+    { day: "Fri", start: "10:15", end: "12:00", course: "AICC", type: "Exercise" },
+    { day: "Fri", start: "13:15", end: "15:00", course: "PROG", type: "Exercise" },
+    { day: "Fri", start: "15:15", end: "16:00", course: "PROG", type: "Lab" },
+  ],
+
+  // date: null means "date not known yet"
+  exams: [
+    { label: "PROG", course: "PROG", date: "2026-12-12T09:00" },                      // exam 09:00-12:00
+    { label: "PROJ", course: "PROG", date: "2026-12-17T13:00", kind: "deadline" },    // project submission
+    { label: "DEF",  course: "PROG", date: "2026-12-18T08:00", kind: "deadline" },    // project defense (time TBD)
+    { label: "PHYS", course: "PHYS", date: "2027-01-15T08:00" },                      // exam 08:00-11:30
+    { label: "AN",   course: "AN",   date: null },
+    { label: "AL",   course: "AL",   date: null },
+    { label: "AICC", course: "AICC", date: null },
+  ],
+  tbdText: "in January",
+
+  nightDim: { from: "23:00", to: "07:00", brightness: 0.45 },
+  decimals: { big: 6, live: 6, small: 2, exams: 5 },  // live = the course you are in right now
+  particles: 60,
+
+  // free space left for the lock screen clock (top) and charging text / shortcuts (bottom)
+  layout: { topSpace: "20dvh", bottomSpace: "19dvh" },
+};
+/* ===================================================================== */
+
+/* ---------- core: schedule, timing, battery, night and layout (same in every design) ---------- */
+const Core = (() => {
+  "use strict";
+  const root = document.documentElement;
+  const $ = (id) => document.getElementById(id);
+  const TAU = Math.PI * 2;
+  const pad = (n) => String(n).padStart(2, "0");
+  const clamp01 = (x) => Math.min(1, Math.max(0, x));
+  const DAYNUM = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
+  const SDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  const SMONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  root.style.setProperty("--top-space", CONFIG.layout.topSpace);
+  root.style.setProperty("--bottom-space", CONFIG.layout.bottomSpace);
+
+  function toTime(s) {
+    const [d, t] = s.split("T");
+    const [y, m, dd] = d.split("-").map(Number);
+    const [hh, mm] = (t || "00:00").split(":").map(Number);
+    return new Date(y, m - 1, dd, hh, mm, 0, 0).getTime();
+  }
+  const ymd = (dt) => `${dt.getFullYear()}-${pad(dt.getMonth() + 1)}-${pad(dt.getDate())}`;
+  const hm = (t) => { const d = new Date(t); return `${pad(d.getHours())}:${pad(d.getMinutes())}`; };
+  const shortDate = (t) => { const d = new Date(t); return `${d.getDate()} ${SMONTHS[d.getMonth()]}`; };
+
+  /* schedule */
+  const START = toTime(CONFIG.countFrom);
+  const SESSION = toTime(CONFIG.examSessionStart);
+  const off = new Set(CONFIG.noClassDays);
+  for (const [a, b] of CONFIG.noClassRanges) {
+    const d = new Date(toTime(a)); const end = toTime(b);
+    while (d.getTime() <= end) { off.add(ymd(d)); d.setDate(d.getDate() + 1); }
+  }
+  const sessions = [];
+  {
+    const d = new Date(toTime(CONFIG.firstClassDay));
+    const last = toTime(CONFIG.lastClassDay);
+    while (d.getTime() <= last) {
+      if (!off.has(ymd(d))) {
+        for (const s of CONFIG.timetable) {
+          if (DAYNUM[s.day] !== d.getDay()) continue;
+          const [sh, sm] = s.start.split(":").map(Number);
+          const [eh, em] = s.end.split(":").map(Number);
+          sessions.push({
+            course: s.course, type: s.type,
+            start: new Date(d.getFullYear(), d.getMonth(), d.getDate(), sh, sm).getTime(),
+            end: new Date(d.getFullYear(), d.getMonth(), d.getDate(), eh, em).getTime(),
+          });
+        }
+      }
+      d.setDate(d.getDate() + 1);
+    }
+  }
+  sessions.sort((a, b) => a.start - b.start);
+  const totals = {};
+  for (const s of sessions) totals[s.course] = (totals[s.course] || 0) + (s.end - s.start);
+  function courseProgress(code, now) {
+    let done = 0;
+    for (const s of sessions) {
+      if (s.course !== code) continue;
+      if (now >= s.end) done += s.end - s.start;
+      else if (now > s.start) done += now - s.start;
+    }
+    return totals[code] ? done / totals[code] : 0;
+  }
+
+  /* exams */
+  const examList = CONFIG.exams
+    .map((x, idx) => ({ ...x, idx, t: x.date ? toTime(x.date) : null }))
+    .sort((a, b) => (a.t === null || b.t === null) ? (a.t === null) - (b.t === null) || a.idx - b.idx : a.t - b.t);
+  const dated = examList.filter((x) => x.t !== null);
+  const tbd = examList.filter((x) => x.t === null).map((x) => x.label);
+  const tbdText = !tbd.length ? "" :
+    `${tbd.length > 1 ? `${tbd.slice(0, -1).join(", ")} and ${tbd[tbd.length - 1]}` : tbd[0]} ${tbd.length > 1 ? "exams: dates" : "exam: date"} ${CONFIG.tbdText}`;
+
+  /* status line */
+  function whenLabel(t, now) {
+    const d = new Date(t), n = new Date(now);
+    const diff = Math.round((new Date(d.getFullYear(), d.getMonth(), d.getDate()) - new Date(n.getFullYear(), n.getMonth(), n.getDate())) / 86400000);
+    if (diff === 0) return `today ${hm(t)}`;
+    if (diff === 1) return `tomorrow ${hm(t)}`;
+    if (diff < 7) return `${SDAYS[d.getDay()]} ${hm(t)}`;
+    return `${SDAYS[d.getDay()]} ${shortDate(t)}, ${hm(t)}`;
+  }
+  function status(now, live) {
+    if (live) return { live: true, code: live.course, text: `${live.course} ${live.type.toLowerCase()} until ${hm(live.end)}` };
+    const next = sessions.find((s) => s.start > now);
+    if (next) return { live: false, code: next.course, text: `Next: ${next.course} ${next.type.toLowerCase()}, ${whenLabel(next.start, now)}` };
+    if (now < SESSION) return { live: false, code: null, text: `Classes are over. Exams start ${shortDate(SESSION)}.` };
+    return { live: false, code: null, text: "Exam session. Good luck." };
+  }
+
+  /* one snapshot of everything a design shows */
+  function state(now) {
+    const live = sessions.find((s) => now >= s.start && now < s.end) || null;
+    const courses = Object.keys(CONFIG.courses).map((code) => ({
+      code, name: CONFIG.courses[code].name, color: CONFIG.courses[code].color,
+      p: courseProgress(code, now), live: !!live && live.course === code,
+    }));
+    return {
+      now, live,
+      session: clamp01((now - START) / (SESSION - START)),
+      sessionLeft: SESSION - now,
+      courses,
+      all: courses.reduce((a, c) => a + c.p, 0) / courses.length,
+      exams: dated.map((x) => ({
+        label: x.label, course: x.course, kind: x.kind || "exam", t: x.t,
+        p: clamp01((now - START) / (x.t - START)), left: x.t - now, done: now >= x.t,
+      })),
+      status: status(now, live),
+    };
+  }
+
+  /* number helpers */
+  function pct(p, dec) {
+    if (p >= 1) return ["100", ""];
+    const v = (clamp01(p) * 100).toFixed(dec);
+    const k = v.indexOf(".");
+    return k < 0 ? [v, ""] : [v.slice(0, k), v.slice(k)];
+  }
+  function parts(ms) {
+    let s = Math.max(0, Math.floor(ms / 1000));
+    const d = Math.floor(s / 86400); s %= 86400;
+    const h = Math.floor(s / 3600); s %= 3600;
+    return { d, h, m: Math.floor(s / 60), s: s % 60 };
+  }
+  function short(ms) {
+    const { d, h, m } = parts(ms);
+    if (d > 0) return `${d} d ${h} h`;
+    if (h > 0) return `${h} h ${pad(m)} m`;
+    return `${m} m`;
+  }
+  const setText = (el, t) => { if (el && el.textContent !== t) el.textContent = t; };
+  // fixed-width digits, so ticking numbers never wobble whatever the font
+  function setDigits(el, str) {
+    if (!el || el._s === str) return;
+    el._s = str;
+    while (el.children.length < str.length) el.appendChild(document.createElement("span"));
+    while (el.children.length > str.length) el.lastChild.remove();
+    for (let i = 0; i < str.length; i++) {
+      const c = el.children[i];
+      if (c.textContent !== str[i]) { c.textContent = str[i]; c.className = /[0-9]/.test(str[i]) ? "" : str[i] === "." ? "pt" : "tx"; }
+    }
+  }
+  function ring(svgParent, r, cls) {
+    const ns = "http://www.w3.org/2000/svg";
+    const C = TAU * r;
+    const c = document.createElementNS(ns, "circle");
+    c.setAttribute("cx", "60"); c.setAttribute("cy", "60"); c.setAttribute("r", String(r));
+    c.setAttribute("class", cls);
+    if (cls.includes("prog")) { c.setAttribute("stroke-dasharray", `${C} ${C}`); c.setAttribute("stroke-dashoffset", String(C)); }
+    svgParent.appendChild(c);
+    return { el: c, C, last: -1 };
+  }
+  function setArc(a, p) {
+    if (Math.abs(p - a.last) < 0.0006 && !(p >= 1 && a.last < 1)) return;
+    a.last = p;
+    a.el.setAttribute("stroke-dashoffset", (a.C * (1 - p)).toFixed(3));
+    a.el.style.visibility = p <= 0 ? "hidden" : "visible";
+  }
+
+  /* battery mode from the app: full, eco or saver */
+  let power = (window.__power && window.__power.mode) || "full";
+  root.dataset.power = power;
+  window.addEventListener("wallpaper-power", (e) => {
+    power = (e.detail && e.detail.mode) || "full";
+    root.dataset.power = power;
+  });
+  const share = () => (power === "saver" ? 0.2 : power === "eco" ? 0.5 : 1);
+
+  /* night */
+  let night = null;
+  const minutesOf = (s) => { const [h, m] = s.split(":").map(Number); return h * 60 + m; };
+  function updateNight(d) {
+    const m = d.getHours() * 60 + d.getMinutes();
+    const f = minutesOf(CONFIG.nightDim.from), t = minutesOf(CONFIG.nightDim.to);
+    const n = f > t ? (m >= f || m < t) : (m >= f && m < t);
+    if (n !== night) {
+      night = n;
+      root.classList.toggle("night", n);
+      $("night").style.opacity = n ? String(1 - CONFIG.nightDim.brightness) : "0";
+    }
+  }
+  const frameSkip = () => (power === "saver" ? 4 : power === "eco" || night ? 2 : 1);
+  const tickMs = () => (power === "saver" ? 500 : night ? 400 : power === "eco" ? 120 : 60);
+
+  /* slow drift against screen burn-in */
+  const driftAt = (t) => [Math.sin(t / 173) * 7, Math.cos(t / 241) * 9];
+
+  const reduce = !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+
+  function start(design) {
+    const stage = $("stage");
+    const cvs = $("fx");
+    const ctx = cvs.getContext("2d");
+    let W = 0, H = 0;
+
+    function fit() {
+      const cs = getComputedStyle(stage);
+      const kids = [...stage.children];
+      const used = () => kids.reduce((h, k) => h + k.offsetHeight, 0) + parseFloat(cs.rowGap || 0) * (kids.length - 1);
+      const avail = stage.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom);
+      let f = 1;
+      root.style.setProperty("--fit", "1");
+      while (f > 0.6 && used() > avail) { f -= 0.03; root.style.setProperty("--fit", f.toFixed(2)); }
+    }
+    function resize() {
+      const dpr = Math.min(2, window.devicePixelRatio || 1);
+      W = window.innerWidth; H = window.innerHeight;
+      cvs.width = Math.round(W * dpr); cvs.height = Math.round(H * dpr);
+      cvs.style.width = W + "px"; cvs.style.height = H + "px";
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      fit();
+      if (design.resize) design.resize(W, H);
+      if (design.measure) design.measure();
+    }
+    function drift() {
+      const [dx, dy] = driftAt(Date.now() / 1000);
+      stage.style.transform = `translate(${dx.toFixed(1)}px, ${dy.toFixed(1)}px)`;
+    }
+
+    design.setup(state(Date.now()));
+    let lastSecond = -1;
+    (function loop() {
+      const now = Date.now();
+      const st = state(now);
+      const sec = Math.floor(now / 1000);
+      if (sec !== lastSecond) { lastSecond = sec; updateNight(new Date(now)); }
+      design.update(st);
+      setTimeout(loop, tickMs());
+    })();
+
+    let last = 0, frameNo = 0;
+    function frame(ts) {
+      requestAnimationFrame(frame);
+      frameNo++;
+      if (frameNo % frameSkip()) return;
+      const dt = last ? Math.min(0.05, (ts - last) / 1000) : 0.016;
+      last = ts;
+      if (!W) return;
+      ctx.clearRect(0, 0, W, H);
+      ctx.globalAlpha = 1;
+      design.frame(ctx, dt, ts / 1000, W, H);
+      ctx.globalAlpha = 1;
+    }
+
+    drift(); setInterval(drift, 6000);
+    resize();
+    window.addEventListener("resize", resize);
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { fit(); if (design.measure) design.measure(); });
+    if (design.measure) setInterval(design.measure, 1000);
+    requestAnimationFrame(frame);
+  }
+
+  return {
+    $, TAU, pad, clamp01, shortDate, hm, pct, parts, short, setText, setDigits, ring, setArc, tbdText,
+    start, driftAt, share, reduce,
+    get power() { return power; },
+    get night() { return !!night; },
+  };
+})();
+
+/* ---------- Léman: dusk over the lake, rings like ripples, light glinting on the water ---------- */
+(() => {
+  "use strict";
+  const C = Core, $ = C.$, ns = "http://www.w3.org/2000/svg";
+  let hero, sun, rings = [], allRing, rows = [];
+  let session = 0, liveAt = null, horizon = 0;
+  const glints = [], stars = [], waves = [];
+  let waveIn = 0;
+
+  function ringTile(code, cls) {
+    const d = document.createElement("div");
+    d.className = "r" + (cls ? " " + cls : "");
+    d.innerHTML = `<svg viewBox="0 0 120 120" aria-hidden="true"><g transform="rotate(-90 60 60)"></g></svg><div class="c">${code}</div><div class="v"><span></span><small></small></div>`;
+    const g = d.querySelector("g");
+    C.ring(g, 48, "trk");
+    $("rings").appendChild(d);
+    return { el: d, arc: C.ring(g, 48, "prog"), i: d.querySelector(".v span"), d: d.querySelector(".v small") };
+  }
+
+  const design = {
+    setup(st) {
+      const g = $("heroG");
+      C.ring(g, 56, "trk");
+      hero = C.ring(g, 56, "prog");
+      sun = document.createElementNS(ns, "circle");
+      sun.setAttribute("r", "2.2"); sun.setAttribute("class", "sun");
+      g.appendChild(sun);
+      allRing = ringTile("All", "all");
+      for (const c of st.courses) { const t = ringTile(c.code); t.code = c.code; rings.push(t); }
+      for (const x of st.exams) {
+        const r = document.createElement("div");
+        r.className = "row" + (x.kind === "deadline" ? " deadline" : "");
+        r.innerHTML = `<span class="c">${x.label}</span><span class="dt">${C.shortDate(x.t)}</span><span class="t"></span><span class="p"><span></span><small></small></span>`;
+        $("list").appendChild(r);
+        rows.push({ el: r, t: r.querySelector(".t"), i: r.querySelector(".p span"), d: r.querySelector(".p small") });
+      }
+      C.setText($("tbd"), C.tbdText);
+    },
+
+    update(st) {
+      session = st.session;
+      C.setArc(hero, st.session);
+      const a = st.session * C.TAU;
+      sun.setAttribute("cx", (60 + 56 * Math.cos(a)).toFixed(2));
+      sun.setAttribute("cy", (60 + 56 * Math.sin(a)).toFixed(2));
+      const [i, d] = C.pct(st.session, CONFIG.decimals.big);
+      C.setText($("hI"), i); C.setDigits($("hD"), d);
+      const t = C.parts(st.sessionLeft);
+      C.setDigits($("hLeft"), `${t.d} days, ${C.pad(t.h)} h ${C.pad(t.m)} min ${C.pad(t.s)} s`);
+
+      liveAt = null;
+      st.courses.forEach((c, k) => {
+        const r = rings[k];
+        C.setArc(r.arc, c.p);
+        r.el.classList.toggle("live", c.live);
+        const [ci, cd] = C.pct(c.p, c.live ? CONFIG.decimals.live : CONFIG.decimals.small);
+        C.setText(r.i, ci); C.setText(r.d, cd + "%");
+        if (c.live) liveAt = r;
+      });
+      C.setArc(allRing.arc, st.all);
+      const [ai, ad] = C.pct(st.all, CONFIG.decimals.small);
+      C.setText(allRing.i, ai); C.setText(allRing.d, ad + "%");
+
+      st.exams.forEach((x, k) => {
+        const r = rows[k];
+        r.el.classList.toggle("done", x.done);
+        C.setText(r.t, x.done ? "Done" : C.short(x.left));
+        const [xi, xd] = C.pct(x.p, CONFIG.decimals.exams);
+        C.setText(r.i, xi); C.setText(r.d, xd + "%");
+      });
+
+      const s = $("status");
+      s.classList.toggle("live", st.status.live);
+      const html = st.status.code ? st.status.text.replace(st.status.code, `<b>${st.status.code}</b>`) : st.status.text;
+      if (s.innerHTML !== html) s.innerHTML = html;
+    },
+
+    measure() {
+      if (liveAt) {
+        const r = liveAt.el.querySelector("svg").getBoundingClientRect();
+        liveAt.at = { x: r.left + r.width / 2, y: r.top + r.height / 2, r: r.width * 0.4 };
+      }
+    },
+
+    resize(W, H) {
+      horizon = H * 0.305;
+      glints.length = 0; stars.length = 0;
+      for (let k = 0; k < 120; k++) {
+        const y = horizon + 6 + Math.pow(Math.random(), 1.6) * (H - horizon);
+        // more glints in a soft column under the ring, like light reflected on the lake
+        const spread = W * (0.14 + 0.4 * (y - horizon) / (H - horizon));
+        const x = Math.random() < 0.65 ? W / 2 + (Math.random() + Math.random() - 1) * spread : Math.random() * W;
+        glints.push({ x, y, w: 2 + Math.random() * 7 * (0.4 + y / H), a: 0.06 + Math.random() * 0.24, tw: 0.4 + Math.random() * 1.4, ph: Math.random() * C.TAU, vx: (Math.random() - 0.5) * 3, warm: Math.random() < 0.25 });
+      }
+      for (let k = 0; k < 40; k++) stars.push({ x: Math.random() * W, y: Math.random() * horizon * 0.95, r: 0.3 + Math.random() * 0.7, a: 0.2 + Math.random() * 0.5, tw: 0.3 + Math.random(), ph: Math.random() * C.TAU });
+    },
+
+    frame(ctx, dt, t, W, H) {
+      const share = C.share();
+      // a few stars above the water
+      for (let k = 0, n = Math.round(stars.length * share); k < n; k++) {
+        const s = stars[k];
+        ctx.globalAlpha = s.a * (0.6 + 0.4 * Math.sin(t * s.tw + s.ph));
+        ctx.fillStyle = "#e8f0ff";
+        ctx.beginPath(); ctx.arc(s.x, s.y, s.r, 0, C.TAU); ctx.fill();
+      }
+      // light glinting on the water
+      for (let k = 0, n = Math.round(glints.length * share); k < n; k++) {
+        const g = glints[k];
+        g.x += g.vx * dt;
+        if (g.x < -20) g.x = W + 10; else if (g.x > W + 20) g.x = -10;
+        const q = Math.max(0, Math.sin(t * g.tw + g.ph));
+        ctx.globalAlpha = g.a * q;
+        ctx.fillStyle = g.warm && !C.night ? "#ffd2b8" : "#d6f1f6";
+        ctx.fillRect(g.x - g.w / 2, g.y, g.w, 0.8);
+        ctx.globalAlpha = g.a * q * 0.45;
+        ctx.fillRect(g.x - g.w, g.y, g.w * 2, 0.8);
+      }
+      // ripples spreading from the course you are in
+      if (liveAt && liveAt.at && C.power !== "saver" && !C.reduce) {
+        waveIn -= dt;
+        if (waveIn <= 0) { waveIn = 1.4; waves.push({ x: liveAt.at.x, y: liveAt.at.y, r: liveAt.at.r, t: 0 }); }
+      }
+      for (let k = waves.length - 1; k >= 0; k--) {
+        const w = waves[k];
+        w.t += dt;
+        if (w.t > 2.6) { waves.splice(k, 1); continue; }
+        ctx.globalAlpha = 0.5 * (1 - w.t / 2.6);
+        ctx.strokeStyle = "#ffc3a0"; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.arc(w.x, w.y, w.r + w.t * 14, 0, C.TAU); ctx.stroke();
+      }
+    },
+  };
+  Core.start(design);
+})();
+</script>
+</body>
+</html>
