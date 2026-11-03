@@ -1,0 +1,720 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#000000">
+<title>Semester wallpaper</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Martian+Mono:wdth,wght@75..112.5,100..800&display=swap" rel="stylesheet">
+<style>
+/* Night screen: always pure black, whatever the viewer's theme. */
+:root {
+  color-scheme: dark;
+  --bg: #000000;
+  --ink: #eaf6ff;
+  --ink-dim: rgba(234, 246, 255, 0.5);
+  --ink-faint: rgba(234, 246, 255, 0.26);
+  --hero: min(60vw, 23dvh, 280px);
+  --ring: min(13.4vw, 6.6dvh, 64px);
+  --top-space: 11dvh;
+  --bottom-space: 19dvh;
+  box-sizing: border-box;
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --bg: #000000; --ink: #eaf6ff; }
+}
+:root[data-theme="dark"] { --bg: #000000; --ink: #eaf6ff; }
+
+html { scroll-padding-top: env(safe-area-inset-top, 0px); }
+html, body { height: 100%; margin: 0; }
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: "Martian Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  overflow: hidden;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+#fx { position: fixed; inset: 0; z-index: 0; pointer-events: none; }
+
+#stage {
+  position: relative; z-index: 1;
+  height: 100%; max-width: 520px; margin: 0 auto;
+  padding: var(--top-space) 4vw var(--bottom-space); box-sizing: border-box;
+  display: flex; flex-direction: column; justify-content: space-evenly;
+  transition: transform 6s linear;
+}
+
+/* Clock */
+.top { text-align: center; }
+.clock {
+  font-size: clamp(36px, 12vw, 58px); font-weight: 150; font-stretch: 112.5%;
+  line-height: 1; letter-spacing: 0.02em; font-variant-numeric: tabular-nums;
+}
+.date, .status { font-size: clamp(10px, 2.9vw, 12px); font-stretch: 85%; }
+.date { color: var(--ink-dim); margin-top: 0.7em; }
+.status { margin-top: 0.45em; display: inline-flex; align-items: center; gap: 0.6em; color: var(--ink); }
+.status .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--sc, #555); box-shadow: 0 0 8px var(--sc, #555); opacity: 0.7; }
+.status.live .dot { opacity: 1; animation: pulse 1.6s ease-in-out infinite; }
+
+/* Big ring */
+.hero { position: relative; width: var(--hero); height: var(--hero); margin: 0 auto; }
+.hero svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.hero .trk { fill: none; stroke: url(#heroGrad); stroke-opacity: 0.12; stroke-width: 3.2; }
+.hero .p { fill: none; stroke-linecap: round; }
+.hero .glow { stroke: url(#heroGrad); stroke-width: 7; opacity: 0.85; }
+.hero .tube { stroke: url(#heroGrad); stroke-width: 3.2; }
+.hero .core { stroke: #ffffff; stroke-width: 1.1; opacity: 0.8; }
+.hero .orbit { transform-origin: 60px 60px; animation: spin 90s linear infinite; }
+.hero .orbit circle { fill: none; stroke: #8fd8ff; stroke-opacity: 0.18; stroke-width: 0.35; stroke-dasharray: 0.6 3.2; }
+.hero .tip-halo { animation: tip 2.6s ease-in-out infinite; transform-box: fill-box; transform-origin: center; }
+.hero.done .tip { display: none; }
+
+.hero-text {
+  position: absolute; inset: 0; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; text-align: center;
+}
+.hero-label { font-size: calc(var(--hero) * 0.047); color: var(--ink-dim); font-stretch: 90%; }
+.hero-pct { line-height: 1; margin: 0.18em 0 0.3em; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.hero-pct .i { font-size: calc(var(--hero) * 0.2); font-weight: 200; }
+.hero-pct .d, .hero-pct .u { font-size: calc(var(--hero) * 0.066); font-weight: 300; font-stretch: 80%; color: var(--ink-dim); }
+.hero-rem { font-size: calc(var(--hero) * 0.05); font-stretch: 80%; font-variant-numeric: tabular-nums; }
+.hero-date { font-size: calc(var(--hero) * 0.04); color: var(--ink-faint); margin-top: 0.6em; font-stretch: 90%; }
+
+/* Small rings */
+.group h2 {
+  margin: 0 0 1.3dvh; text-align: center;
+  font-size: clamp(9.5px, 2.7vw, 11px); font-weight: 400; font-stretch: 90%;
+  color: var(--ink-faint);
+}
+.tiles { display: flex; flex-wrap: wrap; justify-content: center; row-gap: 1.6dvh; }
+.tiles.six .tile { width: 16.666%; }
+.tile.all .trk, .tile.all .glow, .tile.all .tube { stroke: url(#allGrad); }
+.tile.all .code { color: #ffffff; text-shadow: 0 0 8px rgba(255, 255, 255, 0.6); }
+.tiles.four .tile { width: 25%; }
+.tile { text-align: center; }
+.ring-wrap { position: relative; width: var(--ring); height: var(--ring); margin: 0 auto; }
+.ring-wrap > svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.tile .trk { fill: none; stroke: var(--c); stroke-opacity: 0.14; stroke-width: 7; }
+.tile .p { fill: none; stroke-linecap: round; }
+.tile .glow { stroke: var(--c); stroke-width: 12; opacity: 0.55; }
+.tile .tube { stroke: var(--c); stroke-width: 6; }
+.tile .core { stroke: #ffffff; stroke-width: 1.8; opacity: 0.7; }
+.tile.zero .p { display: none; }
+.tile.tbd .p { display: none; }
+.tile.tbd .trk { stroke-width: 3; stroke-opacity: 0.4; stroke-dasharray: 4 7; }
+.tile.tbd .spin { transform-origin: 60px 60px; animation: spin 40s linear infinite; }
+.tile.live .glow { animation: pulse 2.4s ease-in-out infinite; }
+.tile.live .code { text-shadow: 0 0 10px var(--c); }
+
+.center {
+  position: absolute; inset: 0; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 0.15em;
+}
+.code { font-size: calc(var(--ring) * 0.2); font-weight: 600; font-stretch: 78%; color: var(--c); line-height: 1; }
+.check { display: none; width: calc(var(--ring) * 0.32); height: calc(var(--ring) * 0.32); filter: drop-shadow(0 0 4px var(--c)); }
+.check path { fill: none; stroke: var(--c); stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round; }
+.tile.done .check { display: block; }
+.tile.done .code { font-size: calc(var(--ring) * 0.13); opacity: 0.85; }
+
+.pct, .rem { white-space: nowrap; font-stretch: 75%; font-variant-numeric: tabular-nums; }
+.pct { margin-top: 0.7em; font-size: clamp(9px, 2.55vw, 11.5px); }
+.pct .d { color: var(--ink-dim); }
+.rem { margin-top: 0.2em; font-size: clamp(8.5px, 2.35vw, 10.5px); color: var(--ink-dim); }
+
+#night {
+  position: fixed; inset: 0; z-index: 5; pointer-events: none;
+  background: #000000; opacity: 0; transition: opacity 90s linear;
+}
+#hint {
+  position: fixed; left: 0; right: 0; z-index: 6; text-align: center;
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 6px);
+  font-size: 10px; font-stretch: 85%; color: var(--ink-faint);
+  transition: opacity 1.5s ease; pointer-events: none;
+}
+#hint.gone { opacity: 0; }
+
+@keyframes spin { to { transform: rotate(360deg); } }
+@keyframes pulse { 0%, 100% { opacity: 0.35; } 50% { opacity: 1; } }
+@keyframes tip { 0%, 100% { opacity: 0.45; transform: scale(0.8); } 50% { opacity: 1; transform: scale(1.25); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .hero .orbit, .tile.tbd .spin, .hero .tip-halo { animation: none; }
+  .tile.live .glow { animation: none; opacity: 0.95; }
+}
+</style>
+</head>
+<body>
+<canvas id="fx" aria-hidden="true"></canvas>
+
+<main id="stage">
+  <header class="top">
+    <div id="status" class="status"><span class="dot"></span><span id="statusText"></span></div>
+  </header>
+
+  <section class="hero" id="hero" aria-label="Time until the exam session">
+    <svg id="heroSvg" viewBox="0 0 120 120" aria-hidden="true">
+      <defs>
+        <linearGradient id="heroGrad" gradientUnits="userSpaceOnUse" x1="12" y1="12" x2="108" y2="108">
+          <stop offset="0" stop-color="#00e5ff"/>
+          <stop offset="0.55" stop-color="#a46bff"/>
+          <stop offset="1" stop-color="#ff2bd6"/>
+        </linearGradient>
+        <linearGradient id="allGrad" gradientUnits="userSpaceOnUse" x1="12" y1="12" x2="108" y2="108">
+          <stop offset="0" stop-color="#00e5ff"/>
+          <stop offset="0.28" stop-color="#9dff2e"/>
+          <stop offset="0.52" stop-color="#ff8a1f"/>
+          <stop offset="0.76" stop-color="#ff2bd6"/>
+          <stop offset="1" stop-color="#a46bff"/>
+        </linearGradient>
+        <radialGradient id="tipGrad">
+          <stop offset="0" stop-color="#ffffff" stop-opacity="1"/>
+          <stop offset="0.35" stop-color="#ff8cf0" stop-opacity="0.55"/>
+          <stop offset="1" stop-color="#ff2bd6" stop-opacity="0"/>
+        </radialGradient>
+        <filter id="blurHero" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="2.6"/></filter>
+        <filter id="blurSmall" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="3.4"/></filter>
+      </defs>
+      <g class="orbit"><circle cx="60" cy="60" r="57"/></g>
+      <g transform="rotate(-90 60 60)">
+        <circle class="trk" cx="60" cy="60" r="50"/>
+        <circle class="glow p" cx="60" cy="60" r="50" filter="url(#blurHero)"/>
+        <circle class="tube p" cx="60" cy="60" r="50"/>
+        <circle class="core p" cx="60" cy="60" r="50"/>
+        <g class="tip" id="tip">
+          <circle class="tip-halo" cx="0" cy="0" r="6" fill="url(#tipGrad)"/>
+          <circle cx="0" cy="0" r="1.7" fill="#ffffff"/>
+        </g>
+      </g>
+    </svg>
+    <div class="hero-text">
+      <div class="hero-label">Until exams</div>
+      <div class="hero-pct"><span class="i" id="hI">0</span><span class="d" id="hD">.000000</span><span class="u">%</span></div>
+      <div class="hero-rem" id="hRem"></div>
+      <div class="hero-date" id="hDate"></div>
+    </div>
+  </section>
+
+  <section class="group">
+    <h2>Course progress</h2>
+    <div id="classes" class="tiles six"></div>
+  </section>
+
+  <section class="group">
+    <h2>Exams and deadlines</h2>
+    <div id="exams" class="tiles four"></div>
+  </section>
+</main>
+
+<div id="night"></div>
+
+<script>
+/* =====================================================================
+   EDIT HERE: dates, timetable, exams, colors, night mode
+   Dates: "YYYY-MM-DD" or "YYYY-MM-DDTHH:MM" (local time)
+   ===================================================================== */
+const CONFIG = {
+  countFrom: "2026-09-07T00:00",          // 0% point of every countdown
+  examSessionStart: "2027-01-11T00:00",   // big ring reaches 100% here
+
+  firstClassDay: "2026-09-07",
+  lastClassDay: "2026-12-18",
+  noClassDays: ["2026-09-21"],                    // Jeune federal
+  noClassRanges: [["2026-10-19", "2026-10-23"]],  // autumn break
+
+  courses: {
+    AN:   { name: "Analysis I",                  color: "#00e5ff" },
+    AL:   { name: "Linear Algebra",              color: "#ff2bd6" },
+    AICC: { name: "AICC I",                      color: "#9dff2e" },
+    PHYS: { name: "General physics: mechanics",  color: "#ff8a1f" },
+    PROG: { name: "Introduction to programming", color: "#a46bff" },
+  },
+
+  timetable: [
+    { day: "Mon", start: "10:15", end: "12:00", course: "AN",   type: "Lecture" },
+    { day: "Tue", start: "08:15", end: "10:00", course: "AICC", type: "Lecture" },
+    { day: "Tue", start: "10:15", end: "12:00", course: "PHYS", type: "Exercise" },
+    { day: "Tue", start: "15:15", end: "17:00", course: "AL",   type: "Lecture" },
+    { day: "Wed", start: "10:15", end: "12:00", course: "AN",   type: "Lecture" },
+    { day: "Wed", start: "13:15", end: "14:00", course: "PROG", type: "Lecture" },
+    { day: "Wed", start: "14:15", end: "15:00", course: "PROG", type: "Lecture" },
+    { day: "Wed", start: "15:15", end: "17:00", course: "AICC", type: "Lecture" },
+    { day: "Wed", start: "17:15", end: "19:00", course: "PHYS", type: "Lecture" },
+    { day: "Thu", start: "08:15", end: "10:00", course: "AL",   type: "Lecture" },
+    { day: "Thu", start: "10:15", end: "12:00", course: "AN",   type: "Exercise" },
+    { day: "Thu", start: "12:15", end: "14:00", course: "PHYS", type: "Lecture" },
+    { day: "Fri", start: "08:15", end: "10:00", course: "AL",   type: "Exercise" },
+    { day: "Fri", start: "10:15", end: "12:00", course: "AICC", type: "Exercise" },
+    { day: "Fri", start: "13:15", end: "15:00", course: "PROG", type: "Exercise" },
+    { day: "Fri", start: "15:15", end: "16:00", course: "PROG", type: "Lab" },
+  ],
+
+  // date: null means "date not known yet"
+  exams: [
+    { label: "PROG", course: "PROG", date: "2026-12-12T09:00" },  // exam 09:00-12:00
+    { label: "PROJ", course: "PROG", date: "2026-12-17T13:00" },  // project submission
+    { label: "DEF",  course: "PROG", date: "2026-12-18T08:00" },  // project defense (time TBD)
+    { label: "PHYS", course: "PHYS", date: "2027-01-15T08:00" },  // exam 08:00-11:30
+    { label: "AN",   course: "AN",   date: null },
+    { label: "AL",   course: "AL",   date: null },
+    { label: "AICC", course: "AICC", date: null },
+  ],
+  tbdText: "in January",
+
+  // shown next to the date instead of the semester week
+  periods: [
+    { from: "2026-10-17", to: "2026-10-25", label: "autumn break" },
+    { from: "2026-12-19", to: "2027-01-03", label: "Christmas holidays" },
+    { from: "2027-01-04", to: "2027-01-10", label: "revision week" },
+    { from: "2027-01-11", to: "2027-01-30", label: "exam session" },
+  ],
+
+  nightDim: { from: "23:00", to: "07:00", brightness: 0.3 },
+  decimals: { big: 6, small: 5 },
+  particles: 36,
+
+  // free space left for the status bar / clock (top) and app dock (bottom)
+  layout: { topSpace: "22dvh", bottomSpace: "15.5dvh" },
+};
+/* ===================================================================== */
+
+(() => {
+  "use strict";
+  const $ = (id) => document.getElementById(id);
+  document.documentElement.style.setProperty("--top-space", CONFIG.layout.topSpace);
+  document.documentElement.style.setProperty("--bottom-space", CONFIG.layout.bottomSpace);
+  const TAU = Math.PI * 2;
+  const pad = (n) => String(n).padStart(2, "0");
+  const clamp01 = (x) => Math.min(1, Math.max(0, x));
+  const DAYNUM = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
+  const DAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+  const SDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+  const SMONTHS = MONTHS.map((m) => m.slice(0, 3));
+
+  function toTime(s) {
+    const [d, t] = s.split("T");
+    const [y, m, dd] = d.split("-").map(Number);
+    const [hh, mm] = (t || "00:00").split(":").map(Number);
+    return new Date(y, m - 1, dd, hh, mm, 0, 0).getTime();
+  }
+  const ymd = (dt) => `${dt.getFullYear()}-${pad(dt.getMonth() + 1)}-${pad(dt.getDate())}`;
+  const hm = (t) => { const d = new Date(t); return `${pad(d.getHours())}:${pad(d.getMinutes())}`; };
+  const mondayKey = (dt) => {
+    const d = new Date(dt.getFullYear(), dt.getMonth(), dt.getDate());
+    d.setDate(d.getDate() - ((d.getDay() + 6) % 7));
+    return ymd(d);
+  };
+
+  /* ---------- schedule ---------- */
+  const START = toTime(CONFIG.countFrom);
+  const SESSION = toTime(CONFIG.examSessionStart);
+
+  const off = new Set(CONFIG.noClassDays);
+  for (const [a, b] of CONFIG.noClassRanges) {
+    const d = new Date(toTime(a)); const end = toTime(b);
+    while (d.getTime() <= end) { off.add(ymd(d)); d.setDate(d.getDate() + 1); }
+  }
+
+  const sessions = [];
+  {
+    const d = new Date(toTime(CONFIG.firstClassDay));
+    const last = toTime(CONFIG.lastClassDay);
+    while (d.getTime() <= last) {
+      if (!off.has(ymd(d))) {
+        for (const s of CONFIG.timetable) {
+          if (DAYNUM[s.day] !== d.getDay()) continue;
+          const [sh, sm] = s.start.split(":").map(Number);
+          const [eh, em] = s.end.split(":").map(Number);
+          sessions.push({
+            course: s.course, type: s.type,
+            start: new Date(d.getFullYear(), d.getMonth(), d.getDate(), sh, sm).getTime(),
+            end: new Date(d.getFullYear(), d.getMonth(), d.getDate(), eh, em).getTime(),
+          });
+        }
+      }
+      d.setDate(d.getDate() + 1);
+    }
+  }
+  sessions.sort((a, b) => a.start - b.start);
+  const totals = {};
+  for (const s of sessions) totals[s.course] = (totals[s.course] || 0) + (s.end - s.start);
+
+  // semester week = position of this week among the weeks that have classes
+  const classWeeks = [...new Set(sessions.map((s) => mondayKey(new Date(s.start))))];
+  function weekLabel(dt) {
+    const key = ymd(dt);
+    const period = (CONFIG.periods || []).find((p) => key >= p.from && key <= p.to);
+    if (period) return period.label;
+    const i = classWeeks.indexOf(mondayKey(dt));
+    return i >= 0 ? `week ${i + 1}` : "";
+  }
+
+  function courseProgress(code, now) {
+    let done = 0;
+    for (const s of sessions) {
+      if (s.course !== code) continue;
+      if (now >= s.end) done += s.end - s.start;
+      else if (now > s.start) done += now - s.start;
+    }
+    return totals[code] ? done / totals[code] : 0;
+  }
+
+  /* ---------- rings ---------- */
+  const C_SMALL = TAU * 46, C_HERO = TAU * 50;
+  const CHECK = '<svg class="check" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7"/></svg>';
+  const RING = `<svg viewBox="0 0 120 120" aria-hidden="true">
+      <g class="spin"><circle class="trk" cx="60" cy="60" r="46"/></g>
+      <g transform="rotate(-90 60 60)">
+        <circle class="glow p" cx="60" cy="60" r="46" filter="url(#blurSmall)"/>
+        <circle class="tube p" cx="60" cy="60" r="46"/>
+        <circle class="core p" cx="60" cy="60" r="46"/>
+      </g></svg>`;
+
+  function makeTile(label, color, withRem) {
+    const el = document.createElement("div");
+    el.className = "tile";
+    el.style.setProperty("--c", color);
+    el.innerHTML = `<div class="ring-wrap">${RING}<div class="center">${CHECK}<span class="code">${label}</span></div></div>
+      <div class="pct"><span class="i"></span><span class="d"></span></div>${withRem ? '<div class="rem"></div>' : ""}`;
+    const prog = [...el.querySelectorAll(".p")];
+    prog.forEach((c) => c.setAttribute("stroke-dasharray", `${C_SMALL} ${C_SMALL}`));
+    return { el, prog, wrap: el.querySelector(".ring-wrap"), i: el.querySelector(".pct .i"), d: el.querySelector(".pct .d"), rem: el.querySelector(".rem"), lastP: -1, color };
+  }
+
+  function setRing(t, p, circ) {
+    if (Math.abs(p - t.lastP) < 0.0006 && !(p >= 1 && t.lastP < 1)) return;
+    t.lastP = p;
+    const o = (circ * (1 - p)).toFixed(3);
+    for (const c of t.prog) c.setAttribute("stroke-dashoffset", o);
+    if (t.el) t.el.classList.toggle("zero", p <= 0);
+  }
+  function setText(node, text) { if (node && node.textContent !== text) node.textContent = text; }
+  function setPct(iNode, dNode, p, dec, unit = "%") {
+    if (p >= 1) { setText(iNode, "100"); setText(dNode, unit); return; }
+    const v = (clamp01(p) * 100).toFixed(dec);
+    const k = v.indexOf(".");
+    setText(iNode, v.slice(0, k));
+    setText(dNode, v.slice(k) + unit);
+  }
+  function remShort(ms) {
+    let s = Math.max(0, Math.floor(ms / 1000));
+    const d = Math.floor(s / 86400); s %= 86400;
+    const h = Math.floor(s / 3600); s %= 3600;
+    const m = Math.floor(s / 60); s %= 60;
+    if (d > 0) return `${d}d ${h}h`;
+    if (h > 0) return `${h}h ${pad(m)}m`;
+    return `${m}m ${pad(s)}s`;
+  }
+  function remLong(ms) {
+    let s = Math.max(0, Math.floor(ms / 1000));
+    const d = Math.floor(s / 86400); s %= 86400;
+    const h = Math.floor(s / 3600); s %= 3600;
+    const m = Math.floor(s / 60); s %= 60;
+    return `${d}d ${pad(h)}h ${pad(m)}m ${pad(s)}s`;
+  }
+
+  const courseCodes = Object.keys(CONFIG.courses);
+  const allTile = makeTile("ALL", "#ffffff", false);
+  allTile.el.classList.add("all");
+  $("classes").appendChild(allTile.el);
+  const classTiles = courseCodes.map((code) => {
+    const t = makeTile(code, CONFIG.courses[code].color, false);
+    t.code = code;
+    $("classes").appendChild(t.el);
+    return t;
+  });
+
+  const examList = CONFIG.exams
+    .map((x, idx) => ({ ...x, idx, t: x.date ? toTime(x.date) : null }))
+    .sort((a, b) => {
+      if (a.t === null && b.t === null) return a.idx - b.idx;
+      if (a.t === null) return 1;
+      if (b.t === null) return -1;
+      return a.t - b.t;
+    });
+  const examTiles = examList.map((x) => {
+    const color = (CONFIG.courses[x.course] || {}).color || "#ffffff";
+    const t = makeTile(x.label, color, true);
+    t.target = x.t;
+    $("exams").appendChild(t.el);
+    return t;
+  });
+
+  const heroEl = $("hero");
+  const hero = { prog: [...heroEl.querySelectorAll(".p")], lastP: -1, el: null };
+  hero.prog.forEach((c) => c.setAttribute("stroke-dasharray", `${C_HERO} ${C_HERO}`));
+  const sd = new Date(SESSION);
+  $("hDate").textContent = `Starts ${SDAYS[sd.getDay()]} ${sd.getDate()} ${SMONTHS[sd.getMonth()]}`;
+  let heroP = 0;
+  let liveTile = null;
+
+  /* ---------- status line ---------- */
+  function whenLabel(t, now) {
+    const d = new Date(t), n = new Date(now);
+    const diff = Math.round((new Date(d.getFullYear(), d.getMonth(), d.getDate()) - new Date(n.getFullYear(), n.getMonth(), n.getDate())) / 86400000);
+    if (diff === 0) return `today ${hm(t)}`;
+    if (diff === 1) return `tomorrow ${hm(t)}`;
+    if (diff < 7) return `${SDAYS[d.getDay()]} ${hm(t)}`;
+    return `${SDAYS[d.getDay()]} ${d.getDate()} ${SMONTHS[d.getMonth()]}, ${hm(t)}`;
+  }
+  function updateStatus(now, live) {
+    const st = $("status");
+    let text, color = null;
+    if (live) {
+      text = `${live.course} ${live.type.toLowerCase()} until ${hm(live.end)}`;
+      color = CONFIG.courses[live.course].color;
+    } else {
+      const next = sessions.find((s) => s.start > now);
+      if (next) {
+        text = `Next: ${next.course} ${next.type.toLowerCase()}, ${whenLabel(next.start, now)}`;
+        color = CONFIG.courses[next.course].color;
+      } else if (now < SESSION) {
+        text = `Classes are over. Exams start ${sd.getDate()} ${SMONTHS[sd.getMonth()]}.`;
+      } else {
+        text = "Exam session. Good luck.";
+      }
+    }
+    setText($("statusText"), text);
+    st.classList.toggle("live", !!live);
+    st.style.setProperty("--sc", color || "#555555");
+  }
+
+  /* ---------- night mode ---------- */
+  const minutesOf = (s) => { const [h, m] = s.split(":").map(Number); return h * 60 + m; };
+  let night = false;
+  function updateNight(d) {
+    const m = d.getHours() * 60 + d.getMinutes();
+    const f = minutesOf(CONFIG.nightDim.from), t = minutesOf(CONFIG.nightDim.to);
+    const n = f > t ? (m >= f || m < t) : (m >= f && m < t);
+    if (n !== night) { night = n; $("night").style.opacity = n ? String(1 - CONFIG.nightDim.brightness) : "0"; }
+  }
+
+  /* ---------- main update ---------- */
+  let lastSecond = -1;
+  function update() {
+    const now = Date.now();
+    const dNow = new Date(now);
+
+    // big ring
+    heroP = clamp01((now - START) / (SESSION - START));
+    setRing(hero, heroP, C_HERO);
+    setPct($("hI"), $("hD"), heroP, CONFIG.decimals.big, "");
+    const heroDone = heroP >= 1;
+    heroEl.classList.toggle("done", heroDone);
+    setText($("hRem"), heroDone ? "Started. Good luck." : remLong(SESSION - now));
+    const a = heroP * TAU;
+    $("tip").setAttribute("transform", `translate(${(60 + 50 * Math.cos(a)).toFixed(2)} ${(60 + 50 * Math.sin(a)).toFixed(2)})`);
+
+    // classes
+    const live = sessions.find((s) => now >= s.start && now < s.end) || null;
+    liveTile = null;
+    let sum = 0;
+    for (const t of classTiles) {
+      const p = courseProgress(t.code, now);
+      sum += p;
+      setRing(t, p, C_SMALL);
+      setPct(t.i, t.d, p, CONFIG.decimals.small);
+      t.el.classList.toggle("done", p >= 1);
+      const isLive = !!live && live.course === t.code;
+      t.el.classList.toggle("live", isLive);
+      if (isLive) liveTile = t;
+    }
+    const pAll = classTiles.length ? sum / classTiles.length : 0;
+    setRing(allTile, pAll, C_SMALL);
+    setPct(allTile.i, allTile.d, pAll, CONFIG.decimals.small);
+    allTile.el.classList.toggle("done", pAll >= 1);
+
+    // exams
+    for (const t of examTiles) {
+      if (t.target === null) {
+        t.el.classList.add("tbd");
+        setText(t.i, "date TBD"); setText(t.d, "");
+        setText(t.rem, CONFIG.tbdText);
+        continue;
+      }
+      t.el.classList.remove("tbd");
+      const p = clamp01((now - START) / (t.target - START));
+      setRing(t, p, C_SMALL);
+      setPct(t.i, t.d, p, CONFIG.decimals.small);
+      t.el.classList.toggle("done", p >= 1);
+      setText(t.rem, p >= 1 ? "done" : remShort(t.target - now));
+    }
+
+    // once per second
+    const sec = Math.floor(now / 1000);
+    if (sec !== lastSecond) {
+      lastSecond = sec;
+      setText($("clock"), `${pad(dNow.getHours())}:${pad(dNow.getMinutes())}`);
+      const wl = weekLabel(dNow);
+      setText($("date"), `${DAYS[dNow.getDay()]} ${dNow.getDate()} ${MONTHS[dNow.getMonth()]}${wl ? ", " + wl : ""}`);
+      updateStatus(now, live);
+      updateNight(dNow);
+    }
+  }
+  (function loop() { update(); setTimeout(loop, night ? 500 : 160); })();
+
+  /* ---------- burn-in protection: slow drift ---------- */
+  const stage = $("stage");
+  function drift() {
+    const t = Date.now() / 1000;
+    stage.style.transform = `translate(${(Math.sin(t / 173) * 7).toFixed(1)}px, ${(Math.cos(t / 241) * 9).toFixed(1)}px)`;
+  }
+  drift(); setInterval(drift, 6000);
+
+  /* ---------- particles ---------- */
+  const cvs = $("fx");
+  const ctx = cvs.getContext("2d");
+  const reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  let W = 0, H = 0;
+  const anchor = { x: 0, y: 0, r: 0 };
+  let liveAnchor = null;
+
+  function hexA(hex, a) {
+    const n = parseInt(hex.slice(1), 16);
+    return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`;
+  }
+  const sprites = {};
+  function sprite(color) {
+    if (sprites[color]) return sprites[color];
+    const s = document.createElement("canvas");
+    s.width = s.height = 64;
+    const g = s.getContext("2d");
+    const gr = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+    gr.addColorStop(0, "rgba(255,255,255,1)");
+    gr.addColorStop(0.16, hexA(color, 0.95));
+    gr.addColorStop(0.42, hexA(color, 0.22));
+    gr.addColorStop(1, hexA(color, 0));
+    g.fillStyle = gr; g.fillRect(0, 0, 64, 64);
+    return (sprites[color] = s);
+  }
+  const palette = Object.values(CONFIG.courses).map((c) => c.color);
+  const heroColors = ["#00e5ff", "#a46bff", "#ff2bd6", "#8fd8ff"];
+  const pick = (arr) => arr[(Math.random() * arr.length) | 0];
+
+  function resize() {
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    W = window.innerWidth; H = window.innerHeight;
+    cvs.width = Math.round(W * dpr); cvs.height = Math.round(H * dpr);
+    cvs.style.width = W + "px"; cvs.style.height = H + "px";
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    measure();
+  }
+  function measure() {
+    const r = $("heroSvg").getBoundingClientRect();
+    anchor.x = r.left + r.width / 2; anchor.y = r.top + r.height / 2; anchor.r = r.width * 50 / 120;
+    if (liveTile) {
+      const rr = liveTile.wrap.getBoundingClientRect();
+      liveAnchor = { x: rr.left + rr.width / 2, y: rr.top + rr.height / 2, r: rr.width * 46 / 120, color: liveTile.color };
+    } else liveAnchor = null;
+  }
+  window.addEventListener("resize", resize);
+  setInterval(measure, 1000);
+
+  const nDust = reduce ? Math.round(CONFIG.particles / 3) : CONFIG.particles;
+  const dust = [];
+  function newDust(anyY) {
+    return {
+      x: Math.random() * W, y: anyY ? Math.random() * H : H + 12,
+      s: 3 + Math.random() * 7, vy: -(3 + Math.random() * 11),
+      sway: 4 + Math.random() * 16, ph: Math.random() * TAU, fs: 0.15 + Math.random() * 0.45,
+      a: 0.12 + Math.random() * 0.45, tw: 0.4 + Math.random() * 1.4, c: pick(palette),
+    };
+  }
+  const orbit = Array.from({ length: reduce ? 12 : 34 }, () => ({
+    ang: Math.random() * TAU,
+    w: (0.03 + Math.random() * 0.1) * (Math.random() < 0.85 ? 1 : -1),
+    off: 1.1 + (Math.random() - 0.5) * 0.14,
+    wob: Math.random() * TAU,
+    s: 3 + Math.random() * 7, a: 0.2 + Math.random() * 0.6, c: pick(heroColors),
+  }));
+  const sparks = [];
+  function spawnSpark(x, y, vx, vy, color, life, size) {
+    if (sparks.length > 140) return;
+    sparks.push({ x, y, vx, vy, c: color, life, t: 0, s: size });
+  }
+
+  let tipAcc = 0, liveAcc = 0, last = 0;
+  function frame(ts) {
+    requestAnimationFrame(frame);
+    const minDt = night ? 66 : 42;
+    if (ts - last < minDt) return;
+    const dt = last ? Math.min(0.1, (ts - last) / 1000) : 0.033;
+    last = ts;
+    const t = ts / 1000;
+    if (!W) return;
+
+    while (dust.length < nDust) dust.push(newDust(true));
+
+    ctx.clearRect(0, 0, W, H);
+    ctx.globalCompositeOperation = "lighter";
+
+    for (const p of dust) {
+      p.y += p.vy * dt;
+      if (p.y < -16) Object.assign(p, newDust(false));
+      const x = p.x + Math.sin(t * p.fs + p.ph) * p.sway;
+      ctx.globalAlpha = p.a * (0.55 + 0.45 * Math.sin(t * p.tw + p.ph));
+      ctx.drawImage(sprite(p.c), x - p.s / 2, p.y - p.s / 2, p.s, p.s);
+    }
+
+    if (anchor.r) {
+      for (const o of orbit) {
+        o.ang += o.w * dt;
+        const R = anchor.r * (o.off + Math.sin(t * 0.6 + o.wob) * 0.02);
+        const x = anchor.x + Math.cos(o.ang) * R, y = anchor.y + Math.sin(o.ang) * R;
+        ctx.globalAlpha = o.a * (0.6 + 0.4 * Math.sin(t * 1.3 + o.wob));
+        ctx.drawImage(sprite(o.c), x - o.s / 2, y - o.s / 2, o.s, o.s);
+      }
+      // sparks leaving the tip of the big ring
+      if (heroP > 0 && heroP < 1 && !reduce) {
+        tipAcc += dt * 3.2;
+        while (tipAcc >= 1) {
+          tipAcc -= 1;
+          const a = -Math.PI / 2 + heroP * TAU;
+          const x = anchor.x + Math.cos(a) * anchor.r, y = anchor.y + Math.sin(a) * anchor.r;
+          const sp = 8 + Math.random() * 20, dir = a + (Math.random() - 0.5) * 1.6;
+          spawnSpark(x, y, Math.cos(dir) * sp, Math.sin(dir) * sp - 4, pick(["#ffffff", "#ff8cf0", "#8fd8ff"]), 1.2 + Math.random() * 1.4, 3 + Math.random() * 5);
+        }
+      }
+    }
+
+    // sparks around the course you are in right now
+    if (liveAnchor && !reduce) {
+      liveAcc += dt * 12;
+      while (liveAcc >= 1) {
+        liveAcc -= 1;
+        const a = Math.random() * TAU;
+        const x = liveAnchor.x + Math.cos(a) * liveAnchor.r, y = liveAnchor.y + Math.sin(a) * liveAnchor.r;
+        const sp = 10 + Math.random() * 22;
+        spawnSpark(x, y, Math.cos(a) * sp, Math.sin(a) * sp - 10, liveAnchor.color, 1 + Math.random() * 1.3, 3 + Math.random() * 5);
+      }
+    }
+
+    for (let i = sparks.length - 1; i >= 0; i--) {
+      const s = sparks[i];
+      s.t += dt;
+      if (s.t >= s.life) { sparks.splice(i, 1); continue; }
+      s.x += s.vx * dt; s.y += s.vy * dt;
+      s.vx *= 0.985; s.vy *= 0.985;
+      const k = 1 - s.t / s.life;
+      ctx.globalAlpha = k * 0.9;
+      const size = s.s * (0.6 + 0.4 * k);
+      ctx.drawImage(sprite(s.c), s.x - size / 2, s.y - size / 2, size, size);
+    }
+    ctx.globalAlpha = 1;
+    ctx.globalCompositeOperation = "source-over";
+  }
+
+  resize();
+  requestAnimationFrame(frame);
+
+})();
+</script>
+</body>
+</html>
