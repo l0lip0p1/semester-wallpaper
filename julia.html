@@ -1,0 +1,225 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#03070f">
+<title>Julia</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Silkscreen&display=swap" rel="stylesheet">
+<style>
+:root {
+  color-scheme: dark;
+  --fit: 1;
+  --top-space: 20dvh;
+  --bottom-space: 19dvh;
+  box-sizing: border-box;
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { color-scheme: dark; } }
+:root[data-theme="dark"] { color-scheme: dark; }
+html { scroll-padding-top: env(safe-area-inset-top, 0px); }
+html, body { height: 100%; margin: 0; }
+body { overflow: hidden; user-select: none; -webkit-user-select: none; -webkit-tap-highlight-color: transparent; }
+#fx { position: fixed; inset: 0; z-index: 0; pointer-events: none; }
+#stage {
+  position: relative; z-index: 1;
+  height: 100%; max-width: 520px; margin: 0 auto;
+  box-sizing: border-box;
+  padding: var(--top-space) 6vw var(--bottom-space);
+  display: flex; flex-direction: column; justify-content: center;
+  gap: calc(3.2dvh * var(--fit));
+  transition: transform 6s linear;
+}
+#stage > * { flex-shrink: 0; }
+#night { position: fixed; inset: 0; z-index: 5; pointer-events: none; background: #000000; opacity: 0; transition: opacity 90s linear; }
+:root[data-power="saver"] *, :root[data-power="saver"] *::before, :root[data-power="saver"] *::after { animation-play-state: paused !important; }
+
+body { background: #03070f; color: #d8fbff; font-family: "Silkscreen", "Courier New", monospace; }
+#stage { justify-content: flex-end; padding-left: 7vw; padding-right: 7vw; }
+.cap { align-self: flex-start; margin: 0; padding: 6px 9px; border-radius: 4px; background: rgba(3, 8, 15, 0.72); text-shadow: 0 0 6px #000, 0 0 2px #000; font-size: 11px; line-height: 1.6; color: rgba(216, 251, 255, 0.78); letter-spacing: 0.04em; }
+.cap b { font-weight: 400; color: #6fe3e1; }
+.cap .dim { color: rgba(216, 251, 255, 0.42); }
+</style>
+</head>
+<body>
+<canvas id="fx" aria-hidden="true"></canvas>
+
+<main id="stage">
+  <p class="cap" role="img" aria-label="A Julia set in pixels whose parameter follows the time of day, so each minute has its own fractal"><b>Julia</b> <span id="clock"></span><br><span id="c"></span><br><span class="dim">one fractal for every minute of the day</span></p>
+</main>
+
+<div id="night"></div>
+
+<script>
+/* ---------- art core: animation loop, battery modes, night dimming, drift (no timetable) ---------- */
+const Art = (() => {
+  "use strict";
+  const root = document.documentElement;
+  const $ = (id) => document.getElementById(id);
+  const TAU = Math.PI * 2;
+  let power = (window.__power && window.__power.mode) || "full";
+  root.dataset.power = power;
+  window.addEventListener("wallpaper-power", (e) => {
+    power = (e.detail && e.detail.mode) || "full";
+    root.dataset.power = power;
+  });
+  const NIGHT_FROM = 23 * 60, NIGHT_TO = 7 * 60, NIGHT_BRIGHTNESS = 0.45;
+  let night = null;
+  function updateNight() {
+    const d = new Date(), m = d.getHours() * 60 + d.getMinutes();
+    const n = m >= NIGHT_FROM || m < NIGHT_TO;
+    if (n !== night) {
+      night = n;
+      root.classList.toggle("night", n);
+      $("night").style.opacity = n ? String(1 - NIGHT_BRIGHTNESS) : "0";
+    }
+  }
+  const share = () => (power === "saver" ? 0.2 : power === "eco" ? 0.5 : 1);
+  const frameSkip = () => (power === "saver" ? 4 : power === "eco" || night ? 2 : 1);
+  const driftAt = (t) => [Math.sin(t / 173) * 6, Math.cos(t / 241) * 8];
+  const reduce = !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+
+  function start(design) {
+    const cvs = $("fx"), ctx = cvs.getContext("2d"), stage = $("stage");
+    let W = 0, H = 0, dpr = 1;
+    function resize() {
+      dpr = Math.min(2, window.devicePixelRatio || 1);
+      W = window.innerWidth; H = window.innerHeight;
+      cvs.width = Math.round(W * dpr); cvs.height = Math.round(H * dpr);
+      cvs.style.width = W + "px"; cvs.style.height = H + "px";
+      design.resize(W, H, dpr);
+    }
+    let last = 0, frameNo = 0;
+    function frame(ts) {
+      requestAnimationFrame(frame);
+      frameNo++;
+      if (frameNo % frameSkip()) return;
+      const dt = last ? Math.min(0.05, (ts - last) / 1000) : 0.016;
+      last = ts;
+      if (!W) return;
+      const [dx, dy] = driftAt(Date.now() / 1000);
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.clearRect(0, 0, W, H);
+      ctx.translate(dx, dy);
+      ctx.globalAlpha = 1;
+      ctx.globalCompositeOperation = "source-over";
+      design.frame(ctx, dt, ts / 1000, W, H);
+      ctx.globalAlpha = 1;
+      ctx.globalCompositeOperation = "source-over";
+    }
+    function drift() {
+      const [dx, dy] = driftAt(Date.now() / 1000);
+      if (stage) stage.style.transform = `translate(${dx.toFixed(1)}px, ${dy.toFixed(1)}px)`;
+    }
+    updateNight(); setInterval(updateNight, 30000);
+    drift(); setInterval(drift, 6000);
+    resize();
+    window.addEventListener("resize", resize);
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(resize);
+    requestAnimationFrame(frame);
+  }
+  return { start, $, TAU, share, reduce, get power() { return power; }, get night() { return !!night; } };
+})();
+
+/* ---------- Julia: a pixel Julia set whose parameter c is set by the clock ---------- */
+(() => {
+  "use strict";
+  const A = Art, $ = A.$, CELL = 3, MAXIT = 72;
+  let W = 0, H = 0, gw = 0, gh = 0, px = null, pctx = null, img = null, acc = 0;
+  const pal = [];
+  { // navy, blue, teal, cyan, ice
+    const stops = [[1, 3, 7], [6, 18, 36], [20, 56, 96], [31, 140, 150], [111, 227, 225], [216, 251, 255]];
+    for (let i = 0; i < 256; i++) {
+      const q = i / 255 * (stops.length - 1), k = Math.floor(q), f = q - k, a = stops[k], b = stops[Math.min(stops.length - 1, k + 1)];
+      pal.push([a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f, a[2] + (b[2] - a[2]) * f]);
+    }
+  }
+  function cAt(date, t) {
+    // the angle walks once around the circle per day; a tiny breath keeps it alive
+    const sec = date.getHours() * 3600 + date.getMinutes() * 60 + date.getSeconds();
+    const a = (sec / 86400) * Math.PI * 2 + 0.012 * Math.sin(t * 0.35);
+    return [0.7885 * Math.cos(a), 0.7885 * Math.sin(a), a];
+  }
+  let mus = null;
+  // the long axis of the set, measured on a coarse grid, so it can be turned to run down the screen
+  let axis = 0, axisC = null;
+  function principal(cr, ci) {
+    let sxx = 0, syy = 0, sxy = 0;
+    for (let i = 0; i < 64; i++) for (let j = 0; j < 64; j++) {
+      const x0 = -2 + 4 * i / 63, y0 = -2 + 4 * j / 63;
+      let zr = x0, zi = y0, n = 0;
+      for (; n < 40; n++) { const a = zr * zr, b = zi * zi; if (a + b > 16) break; zi = 2 * zr * zi + ci; zr = a - b + cr; }
+      if (n < 12) continue;
+      const w = n;
+      sxx += w * x0 * x0; syy += w * y0 * y0; sxy += w * x0 * y0;
+    }
+    return 0.5 * Math.atan2(2 * sxy, sxx - syy);
+  }
+  function render(cr, ci) {
+    if (!axisC || Math.hypot(cr - axisC[0], ci - axisC[1]) > 0.002) {
+      const target = principal(cr, ci);
+      // pick the equivalent angle closest to the current one, so the view never flips
+      let d = target - axis; d -= Math.round(d / Math.PI) * Math.PI;
+      axis = axisC ? axis + d : target;
+      axisC = [cr, ci];
+    }
+    const rc = Math.cos(axis), rs = Math.sin(axis);
+    const d = img.data, scale = Math.max(3.2 / gh, 2.5 / gw);   // the real axis runs down the tall screen
+    const LOG2 = Math.log(2);
+    if (!mus || mus.length !== gw * gh) mus = new Float32Array(gw * gh);
+    let top = 1;
+    for (let py = 0; py < gh; py++) {
+      for (let pxx = 0; pxx < gw; pxx++) {
+        const u = (py - gh / 2) * scale, v = (pxx - gw / 2) * scale;
+        let zr = u * rc - v * rs, zi = u * rs + v * rc, n = 0, r2 = 0;
+        for (; n < MAXIT; n++) {
+          const zr2 = zr * zr, zi2 = zi * zi; r2 = zr2 + zi2;
+          if (r2 > 16) break;
+          zi = 2 * zr * zi + ci; zr = zr2 - zi2 + cr;
+        }
+        const mu = n >= MAXIT ? -1 : Math.max(0, n + 1 - Math.log(Math.log(Math.sqrt(r2))) / LOG2);
+        mus[py * gw + pxx] = mu;
+        if (mu > top) top = mu;
+      }
+    }
+    // auto exposure: every set uses the whole palette, faint dust as much as bold dendrites
+    for (let i = 0; i < mus.length; i++) {
+      const k = i * 4, mu = mus[i];
+      if (mu < 0) { d[k] = 2; d[k + 1] = 5; d[k + 2] = 10; }
+      else { const c = pal[Math.min(255, (Math.pow(mu / top, 0.7) * 255) | 0)]; d[k] = c[0]; d[k + 1] = c[1]; d[k + 2] = c[2]; }
+      d[k + 3] = 255;
+    }
+    pctx.putImageData(img, 0, 0);
+  }
+  const design = {
+    resize(w, h) {
+      W = w; H = h; gw = Math.ceil(W / CELL); gh = Math.ceil(H / CELL);
+      px = document.createElement("canvas"); px.width = gw; px.height = gh;
+      pctx = px.getContext("2d"); img = pctx.createImageData(gw, gh); acc = 1;
+    },
+    frame(ctx, dt, t) {
+      if (!px) return;
+      acc += dt;
+      const every = A.power === "saver" ? 2 : A.power === "eco" ? 0.15 : 0.066;   // the set is heavy: redraw at most ~15 times a second
+      const now = new Date();
+      if (acc >= every) {
+        acc = 0;
+        const [cr, ci] = cAt(now, A.reduce ? 0 : t);
+        render(cr, ci);
+        const txt = `c = ${cr < 0 ? "−" : ""}${Math.abs(cr).toFixed(4)} ${ci < 0 ? "−" : "+"} ${Math.abs(ci).toFixed(4)}i`;
+        if ($("c").textContent !== txt) $("c").textContent = txt;
+        const clk = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+        if ($("clock").textContent !== clk) $("clock").textContent = clk;
+      }
+      ctx.imageSmoothingEnabled = false;
+      ctx.drawImage(px, -CELL * 2, -CELL * 2, (gw + 4) * CELL, (gh + 4) * CELL);
+    },
+  };
+  Art.start(design);
+})();
+</script>
+</body>
+</html>

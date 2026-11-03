@@ -1,0 +1,207 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#04101c">
+<title>Penrose</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Silkscreen&display=swap" rel="stylesheet">
+<style>
+:root {
+  color-scheme: dark;
+  --fit: 1;
+  --top-space: 20dvh;
+  --bottom-space: 19dvh;
+  box-sizing: border-box;
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { color-scheme: dark; } }
+:root[data-theme="dark"] { color-scheme: dark; }
+html { scroll-padding-top: env(safe-area-inset-top, 0px); }
+html, body { height: 100%; margin: 0; }
+body { overflow: hidden; user-select: none; -webkit-user-select: none; -webkit-tap-highlight-color: transparent; }
+#fx { position: fixed; inset: 0; z-index: 0; pointer-events: none; }
+#stage {
+  position: relative; z-index: 1;
+  height: 100%; max-width: 520px; margin: 0 auto;
+  box-sizing: border-box;
+  padding: var(--top-space) 6vw var(--bottom-space);
+  display: flex; flex-direction: column; justify-content: center;
+  gap: calc(3.2dvh * var(--fit));
+  transition: transform 6s linear;
+}
+#stage > * { flex-shrink: 0; }
+#night { position: fixed; inset: 0; z-index: 5; pointer-events: none; background: #000000; opacity: 0; transition: opacity 90s linear; }
+:root[data-power="saver"] *, :root[data-power="saver"] *::before, :root[data-power="saver"] *::after { animation-play-state: paused !important; }
+
+body { background: #04101c; color: #d8fbff; font-family: "Silkscreen", "Courier New", monospace; }
+#stage { justify-content: flex-end; padding-left: 7vw; padding-right: 7vw; }
+.cap { align-self: flex-start; margin: 0; padding: 6px 9px; border-radius: 4px; background: rgba(3, 8, 15, 0.72); text-shadow: 0 0 6px #000, 0 0 2px #000; font-size: 11px; line-height: 1.6; color: rgba(216, 251, 255, 0.78); letter-spacing: 0.04em; }
+.cap b { font-weight: 400; color: #6fe3e1; }
+.cap .dim { color: rgba(216, 251, 255, 0.42); }
+</style>
+</head>
+<body>
+<canvas id="fx" aria-hidden="true"></canvas>
+
+<main id="stage">
+  <p class="cap" role="img" aria-label="A Penrose tiling in pixels, crossed by slow waves of light"><b>Penrose</b><br><span class="dim">a tiling that never repeats itself</span></p>
+</main>
+
+<div id="night"></div>
+
+<script>
+/* ---------- art core: animation loop, battery modes, night dimming, drift (no timetable) ---------- */
+const Art = (() => {
+  "use strict";
+  const root = document.documentElement;
+  const $ = (id) => document.getElementById(id);
+  const TAU = Math.PI * 2;
+  let power = (window.__power && window.__power.mode) || "full";
+  root.dataset.power = power;
+  window.addEventListener("wallpaper-power", (e) => {
+    power = (e.detail && e.detail.mode) || "full";
+    root.dataset.power = power;
+  });
+  const NIGHT_FROM = 23 * 60, NIGHT_TO = 7 * 60, NIGHT_BRIGHTNESS = 0.45;
+  let night = null;
+  function updateNight() {
+    const d = new Date(), m = d.getHours() * 60 + d.getMinutes();
+    const n = m >= NIGHT_FROM || m < NIGHT_TO;
+    if (n !== night) {
+      night = n;
+      root.classList.toggle("night", n);
+      $("night").style.opacity = n ? String(1 - NIGHT_BRIGHTNESS) : "0";
+    }
+  }
+  const share = () => (power === "saver" ? 0.2 : power === "eco" ? 0.5 : 1);
+  const frameSkip = () => (power === "saver" ? 4 : power === "eco" || night ? 2 : 1);
+  const driftAt = (t) => [Math.sin(t / 173) * 6, Math.cos(t / 241) * 8];
+  const reduce = !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+
+  function start(design) {
+    const cvs = $("fx"), ctx = cvs.getContext("2d"), stage = $("stage");
+    let W = 0, H = 0, dpr = 1;
+    function resize() {
+      dpr = Math.min(2, window.devicePixelRatio || 1);
+      W = window.innerWidth; H = window.innerHeight;
+      cvs.width = Math.round(W * dpr); cvs.height = Math.round(H * dpr);
+      cvs.style.width = W + "px"; cvs.style.height = H + "px";
+      design.resize(W, H, dpr);
+    }
+    let last = 0, frameNo = 0;
+    function frame(ts) {
+      requestAnimationFrame(frame);
+      frameNo++;
+      if (frameNo % frameSkip()) return;
+      const dt = last ? Math.min(0.05, (ts - last) / 1000) : 0.016;
+      last = ts;
+      if (!W) return;
+      const [dx, dy] = driftAt(Date.now() / 1000);
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.clearRect(0, 0, W, H);
+      ctx.translate(dx, dy);
+      ctx.globalAlpha = 1;
+      ctx.globalCompositeOperation = "source-over";
+      design.frame(ctx, dt, ts / 1000, W, H);
+      ctx.globalAlpha = 1;
+      ctx.globalCompositeOperation = "source-over";
+    }
+    function drift() {
+      const [dx, dy] = driftAt(Date.now() / 1000);
+      if (stage) stage.style.transform = `translate(${dx.toFixed(1)}px, ${dy.toFixed(1)}px)`;
+    }
+    updateNight(); setInterval(updateNight, 30000);
+    drift(); setInterval(drift, 6000);
+    resize();
+    window.addEventListener("resize", resize);
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(resize);
+    requestAnimationFrame(frame);
+  }
+  return { start, $, TAU, share, reduce, get power() { return power; }, get night() { return !!night; } };
+})();
+
+/* ---------- Penrose: an aperiodic tiling of two rhombs, with waves of light running through it ---------- */
+(() => {
+  "use strict";
+  const A = Art, CELL = 2;
+  const PHI = (1 + Math.sqrt(5)) / 2;
+  let W = 0, H = 0, gw = 0, gh = 0, px = null, pctx = null, tris = [];
+  const waves = [];
+  let waveIn = 0;
+
+  /* Robinson triangles, subdivided: kind 0 = thin rhomb half, kind 1 = thick rhomb half */
+  function tiling(R, depth) {
+    let t = [];
+    for (let i = 0; i < 10; i++) {
+      const a1 = (2 * i - 1) * Math.PI / 10, a2 = (2 * i + 1) * Math.PI / 10;
+      let B = [R * Math.cos(a1), R * Math.sin(a1)], C = [R * Math.cos(a2), R * Math.sin(a2)];
+      if (i % 2 === 0) [B, C] = [C, B];
+      t.push([0, [0, 0], B, C]);
+    }
+    const lerp = (p, q, f) => [p[0] + (q[0] - p[0]) * f, p[1] + (q[1] - p[1]) * f];
+    for (let d = 0; d < depth; d++) {
+      const n = [];
+      for (const [k, Aa, B, C] of t) {
+        if (k === 0) {
+          const P = lerp(Aa, B, 1 / PHI);
+          n.push([0, C, P, B], [1, P, C, Aa]);
+        } else {
+          const Q = lerp(B, Aa, 1 / PHI), Rr = lerp(B, C, 1 / PHI);
+          n.push([1, Rr, C, Aa], [1, Q, Rr, B], [0, Rr, Q, Aa]);
+        }
+      }
+      t = n;
+    }
+    return t.map(([k, Aa, B, C]) => ({ k, Aa, B, C, cx: (Aa[0] + B[0] + C[0]) / 3, cy: (Aa[1] + B[1] + C[1]) / 3, ph: Math.random() * 6 }));
+  }
+
+  const design = {
+    resize(w, h) {
+      W = w; H = h; gw = Math.ceil(W / CELL) + 8; gh = Math.ceil(H / CELL) + 8;
+      px = document.createElement("canvas"); px.width = gw; px.height = gh;
+      pctx = px.getContext("2d");
+      tris = tiling(Math.hypot(gw, gh) * 0.62, 6);
+    },
+    frame(ctx, dt, t) {
+      if (!px) return;
+      const c = pctx;
+      c.setTransform(1, 0, 0, 1, 0, 0);
+      c.fillStyle = "#04101c"; c.fillRect(0, 0, gw, gh);
+      // a very slow turn about the five-fold centre
+      const rot = A.reduce ? 0 : t * 0.004;
+      c.translate(gw / 2, gh * 0.46); c.rotate(rot);
+      // light waves start from random points and spread through the tiles
+      if (!A.reduce && A.power !== "saver") { waveIn -= dt; if (waveIn <= 0) { waveIn = 7 + Math.random() * 6; waves.push({ x: (Math.random() - 0.5) * gw, y: (Math.random() - 0.5) * gh, t: 0 }); } }
+      for (let i = waves.length - 1; i >= 0; i--) { waves[i].t += dt; if (waves[i].t > 16) waves.splice(i, 1); }
+      for (const tr of tris) {
+        let glow = 0;
+        for (const wv of waves) {
+          const d = Math.hypot(tr.cx - wv.x, tr.cy - wv.y), front = wv.t * 34;
+          const q = 1 - Math.abs(d - front) / 26;
+          if (q > 0) glow = Math.max(glow, q * Math.max(0, 1 - wv.t / 16));
+        }
+        const breathe = 0.5 + 0.5 * Math.sin(t * 0.25 + tr.ph);
+        const base = tr.k ? [10, 40, 66] : [18, 70, 96];
+        const r = base[0] + glow * 80 + breathe * 4, g = base[1] + glow * 170 + breathe * 8, b = base[2] + glow * 150 + breathe * 10;
+        const col = `rgb(${r | 0},${g | 0},${b | 0})`;
+        c.fillStyle = col; c.strokeStyle = col; c.lineWidth = 0.9;   // the stroke hides the seam between the two halves
+        c.beginPath(); c.moveTo(tr.Aa[0], tr.Aa[1]); c.lineTo(tr.B[0], tr.B[1]); c.lineTo(tr.C[0], tr.C[1]); c.closePath(); c.fill(); c.stroke();
+      }
+      // rhomb edges (not the shared diagonal), in a lighter line
+      c.strokeStyle = "rgba(111,227,225,0.38)"; c.lineWidth = 1;
+      c.beginPath();
+      for (const tr of tris) { c.moveTo(tr.C[0], tr.C[1]); c.lineTo(tr.Aa[0], tr.Aa[1]); c.lineTo(tr.B[0], tr.B[1]); }
+      c.stroke();
+      ctx.imageSmoothingEnabled = false;
+      ctx.drawImage(px, -8, -8, gw * CELL, gh * CELL);
+    },
+  };
+  Art.start(design);
+})();
+</script>
+</body>
+</html>

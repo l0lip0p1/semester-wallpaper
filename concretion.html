@@ -1,0 +1,252 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#050b14">
+<title>Concrétion</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Silkscreen&display=swap" rel="stylesheet">
+<style>
+:root {
+  color-scheme: dark;
+  --fit: 1;
+  --top-space: 20dvh;
+  --bottom-space: 19dvh;
+  box-sizing: border-box;
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { color-scheme: dark; } }
+:root[data-theme="dark"] { color-scheme: dark; }
+html { scroll-padding-top: env(safe-area-inset-top, 0px); }
+html, body { height: 100%; margin: 0; }
+body { overflow: hidden; user-select: none; -webkit-user-select: none; -webkit-tap-highlight-color: transparent; }
+#fx { position: fixed; inset: 0; z-index: 0; pointer-events: none; }
+#stage {
+  position: relative; z-index: 1;
+  height: 100%; max-width: 520px; margin: 0 auto;
+  box-sizing: border-box;
+  padding: var(--top-space) 6vw var(--bottom-space);
+  display: flex; flex-direction: column; justify-content: center;
+  gap: calc(3.2dvh * var(--fit));
+  transition: transform 6s linear;
+}
+#stage > * { flex-shrink: 0; }
+#night { position: fixed; inset: 0; z-index: 5; pointer-events: none; background: #000000; opacity: 0; transition: opacity 90s linear; }
+:root[data-power="saver"] *, :root[data-power="saver"] *::before, :root[data-power="saver"] *::after { animation-play-state: paused !important; }
+
+body { background: #050b14; color: #d8fbff; font-family: "Silkscreen", "Courier New", monospace; }
+#stage { justify-content: flex-end; padding-left: 7vw; padding-right: 7vw; }
+.cap { align-self: flex-start; margin: 0; padding: 6px 9px; border-radius: 4px; background: rgba(3, 8, 15, 0.72); font-size: 11px; line-height: 1.6; color: rgba(216, 251, 255, 0.78); letter-spacing: 0.04em; }
+.cap b { font-weight: 400; color: #6fe3e1; }
+.cap .dim { color: rgba(216, 251, 255, 0.42); }
+</style>
+</head>
+<body>
+<canvas id="fx" aria-hidden="true"></canvas>
+
+<main id="stage">
+  <p class="cap" role="img" aria-label="Pixel stalactites growing slowly from a cave ceiling by diffusion-limited aggregation"><b>Concrétion</b><br><span id="count"></span><br><span class="dim">diffusion-limited aggregation</span></p>
+</main>
+
+<div id="night"></div>
+
+<script>
+/* ---------- art core: animation loop, battery modes, night dimming, drift (no timetable) ---------- */
+const Art = (() => {
+  "use strict";
+  const root = document.documentElement;
+  const $ = (id) => document.getElementById(id);
+  const TAU = Math.PI * 2;
+  let power = (window.__power && window.__power.mode) || "full";
+  root.dataset.power = power;
+  window.addEventListener("wallpaper-power", (e) => {
+    power = (e.detail && e.detail.mode) || "full";
+    root.dataset.power = power;
+  });
+  const NIGHT_FROM = 23 * 60, NIGHT_TO = 7 * 60, NIGHT_BRIGHTNESS = 0.45;
+  let night = null;
+  function updateNight() {
+    const d = new Date(), m = d.getHours() * 60 + d.getMinutes();
+    const n = m >= NIGHT_FROM || m < NIGHT_TO;
+    if (n !== night) {
+      night = n;
+      root.classList.toggle("night", n);
+      $("night").style.opacity = n ? String(1 - NIGHT_BRIGHTNESS) : "0";
+    }
+  }
+  const share = () => (power === "saver" ? 0.2 : power === "eco" ? 0.5 : 1);
+  const frameSkip = () => (power === "saver" ? 4 : power === "eco" || night ? 2 : 1);
+  const driftAt = (t) => [Math.sin(t / 173) * 6, Math.cos(t / 241) * 8];
+  const reduce = !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+
+  function start(design) {
+    const cvs = $("fx"), ctx = cvs.getContext("2d"), stage = $("stage");
+    let W = 0, H = 0, dpr = 1;
+    function resize() {
+      dpr = Math.min(2, window.devicePixelRatio || 1);
+      W = window.innerWidth; H = window.innerHeight;
+      cvs.width = Math.round(W * dpr); cvs.height = Math.round(H * dpr);
+      cvs.style.width = W + "px"; cvs.style.height = H + "px";
+      design.resize(W, H, dpr);
+    }
+    let last = 0, frameNo = 0;
+    function frame(ts) {
+      requestAnimationFrame(frame);
+      frameNo++;
+      if (frameNo % frameSkip()) return;
+      const dt = last ? Math.min(0.05, (ts - last) / 1000) : 0.016;
+      last = ts;
+      if (!W) return;
+      const [dx, dy] = driftAt(Date.now() / 1000);
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.clearRect(0, 0, W, H);
+      ctx.translate(dx, dy);
+      ctx.globalAlpha = 1;
+      ctx.globalCompositeOperation = "source-over";
+      design.frame(ctx, dt, ts / 1000, W, H);
+      ctx.globalAlpha = 1;
+      ctx.globalCompositeOperation = "source-over";
+    }
+    function drift() {
+      const [dx, dy] = driftAt(Date.now() / 1000);
+      if (stage) stage.style.transform = `translate(${dx.toFixed(1)}px, ${dy.toFixed(1)}px)`;
+    }
+    updateNight(); setInterval(updateNight, 30000);
+    drift(); setInterval(drift, 6000);
+    resize();
+    window.addEventListener("resize", resize);
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(resize);
+    requestAnimationFrame(frame);
+  }
+  return { start, $, TAU, share, reduce, get power() { return power; }, get night() { return !!night; } };
+})();
+
+/* ---------- Concrétion: pixel stalactites that really grow, grain by grain (DLA) ---------- */
+(() => {
+  "use strict";
+  const A = Art, $ = A.$, CELL = 4, KEY = "concretion-v1";
+  const PAL = [[216, 251, 255], [111, 227, 225], [31, 163, 163], [31, 78, 121], [16, 42, 70]];
+  let W = 0, H = 0, gw = 0, gh = 0, grid = null, order = [], px = null, pctx = null, img = null, floorY = 0;
+  let walkers = [], drops = [], melting = 0, savedAt = 0;
+  const rnd = (a, b) => a + Math.random() * (b - a);
+  const idx = (x, y) => y * gw + x;
+
+  function colorFor(rank) {               // newest grains are ice-white, older ones sink into deep blue
+    const age = order.length - rank;
+    const q = Math.min(1, age / 2500) * (PAL.length - 1);
+    const i = Math.floor(q), f = q - i, a = PAL[i], b = PAL[Math.min(PAL.length - 1, i + 1)];
+    return [a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f, a[2] + (b[2] - a[2]) * f];
+  }
+  function ceiling() {                    // an uneven rock ceiling to grow from
+    let y = 3;
+    for (let x = 0; x < gw; x++) {
+      y = Math.max(1, Math.min(9, y + (Math.random() < 0.5 ? -1 : 1) * (Math.random() < 0.4 ? 1 : 0)));
+      for (let k = 0; k <= y; k++) grid[idx(x, k)] = 1;
+    }
+  }
+  function reset() {
+    grid = new Uint8Array(gw * gh); order = [];
+    ceiling();
+  }
+  function load() {
+    try {
+      const s = JSON.parse(localStorage.getItem(KEY) || "null");
+      if (s && s.gw === gw && s.gh === gh && Array.isArray(s.order)) {
+        reset();
+        for (const i of s.order) if (i >= 0 && i < grid.length && !grid[i]) { grid[i] = 2; order.push(i); }
+        return;
+      }
+    } catch (e) { /* start fresh */ }
+    reset();
+  }
+  function save() { try { localStorage.setItem(KEY, JSON.stringify({ gw, gh, order })); } catch (e) { /* storage full or blocked */ } }
+  function spawn() { return { x: (Math.random() * gw) | 0, y: (rnd(gh * 0.12, floorY - 2)) | 0 }; }
+  function stuck(x, y) {
+    for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+      const nx = x + dx, ny = y + dy;
+      if (nx >= 0 && nx < gw && ny >= 0 && ny < gh && grid[idx(nx, ny)]) return true;
+    }
+    return false;
+  }
+  function paint() {
+    const d = img.data;
+    for (let i = 0; i < gw * gh; i++) {
+      const y = (i / gw) | 0, k = i * 4;
+      let c;
+      if (y >= floorY) c = [6, 22, 34];                                   // the pool
+      else if (grid[i] === 1) c = [12, 26, 44];                           // rock
+      else c = [5 + y * 0.02, 11 + y * 0.03, 20 + y * 0.05];               // dark air
+      d[k] = c[0]; d[k + 1] = c[1]; d[k + 2] = c[2]; d[k + 3] = 255;
+    }
+    order.forEach((i, r) => { const c = colorFor(r), k = i * 4; d[k] = c[0]; d[k + 1] = c[1]; d[k + 2] = c[2]; });
+  }
+
+  const design = {
+    resize(w, h) {
+      W = w; H = h;
+      gw = Math.ceil(W / CELL); gh = Math.ceil(H / CELL); floorY = Math.floor(gh * 0.9);
+      px = document.createElement("canvas"); px.width = gw; px.height = gh;
+      pctx = px.getContext("2d"); img = pctx.createImageData(gw, gh);
+      load();
+      walkers = []; for (let k = 0; k < 90; k++) walkers.push(spawn());    // slow on purpose: the formation keeps growing for a long while
+    },
+
+    frame(ctx, dt, t) {
+      if (!grid) return;
+      const share = A.share();
+      // grow: random walkers drift up with the seeping water and freeze where they touch
+      if (!melting && !A.reduce) {
+        const n = Math.round(walkers.length * share), steps = 1;
+        for (let k = 0; k < n; k++) {
+          const w = walkers[k];
+          for (let s = 0; s < steps; s++) {
+            const r = Math.random();
+            if (r < 0.25) w.x--; else if (r < 0.5) w.x++; else if (r < 0.8) w.y--; else w.y++;
+            if (w.x < 0) w.x = gw - 1; if (w.x >= gw) w.x = 0;
+            if (w.y < 1 || w.y >= floorY - 1) { Object.assign(w, spawn()); continue; }
+            if (!grid[idx(w.x, w.y)] && stuck(w.x, w.y) && Math.random() < 0.85) {
+              grid[idx(w.x, w.y)] = 2; order.push(idx(w.x, w.y));
+              if (w.y > gh * 0.72) melting = 1;                  // the formation is complete: let it melt away
+              Object.assign(w, spawn());
+              break;
+            }
+          }
+        }
+      }
+      if (melting) {
+        melting += dt;
+        const drop = Math.ceil(order.length * dt / 6);
+        for (let k = 0; k < drop && order.length; k++) { const i = order.pop(); grid[i] = 0; }
+        if (!order.length) { melting = 0; reset(); save(); }
+      }
+      paint();
+      // a drop now and then from the lowest tips
+      if (!A.reduce && A.power !== "saver" && order.length && Math.random() < dt * 0.8) {
+        const i = order[order.length - 1 - ((Math.random() * Math.min(200, order.length)) | 0)];
+        drops.push({ x: i % gw, y: (i / gw) | 0, v: 0 });
+      }
+      const d = img.data;
+      for (let k = drops.length - 1; k >= 0; k--) {
+        const p = drops[k];
+        p.v += 40 * dt; p.y += p.v * dt;
+        if (p.y >= floorY) { drops.splice(k, 1); continue; }
+        const j = (idx(p.x, p.y | 0)) * 4; d[j] = 216; d[j + 1] = 251; d[j + 2] = 255;
+      }
+      // shimmer on the pool
+      for (let x = 0; x < gw; x++) if (Math.sin(x * 1.7 + t * 0.9) + Math.sin(x * 0.43 - t * 0.6) > 1.6) { const j = idx(x, floorY) * 4; d[j] = 60; d[j + 1] = 140; d[j + 2] = 160; }
+      pctx.putImageData(img, 0, 0);
+      ctx.imageSmoothingEnabled = false;
+      ctx.drawImage(px, -CELL, -CELL, (gw + 2) * CELL, (gh + 2) * CELL);
+      if (Date.now() - savedAt > 60000) { savedAt = Date.now(); save(); }
+      const c = $("count"), txt = `${order.length.toLocaleString("fr-CH")} cristaux`;
+      if (c.textContent !== txt) c.textContent = txt;
+    },
+  };
+  Art.start(design);
+})();
+</script>
+</body>
+</html>
