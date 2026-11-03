@@ -1,0 +1,312 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#000000">
+<title>Berger</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;500&family=Barlow:wght@300;400&display=swap" rel="stylesheet">
+<style>
+:root {
+  color-scheme: dark;
+  --fit: 1;
+  --top-space: 20dvh;
+  --bottom-space: 19dvh;
+  box-sizing: border-box;
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { color-scheme: dark; } }
+:root[data-theme="dark"] { color-scheme: dark; }
+html { scroll-padding-top: env(safe-area-inset-top, 0px); }
+html, body { height: 100%; margin: 0; }
+body { overflow: hidden; user-select: none; -webkit-user-select: none; -webkit-tap-highlight-color: transparent; }
+#fx { position: fixed; inset: 0; z-index: 0; pointer-events: none; }
+#stage {
+  position: relative; z-index: 1;
+  height: 100%; max-width: 520px; margin: 0 auto;
+  box-sizing: border-box;
+  padding: var(--top-space) 6vw var(--bottom-space);
+  display: flex; flex-direction: column; justify-content: center;
+  gap: calc(3.2dvh * var(--fit));
+  transition: transform 6s linear;
+}
+#stage > * { flex-shrink: 0; }
+#night { position: fixed; inset: 0; z-index: 5; pointer-events: none; background: #000000; opacity: 0; transition: opacity 90s linear; }
+:root[data-power="saver"] *, :root[data-power="saver"] *::before, :root[data-power="saver"] *::after { animation-play-state: paused !important; }
+
+body { background: #000000; color: #ece6dc; font-family: "Barlow", "Helvetica Neue", Arial, sans-serif; font-weight: 300; }
+#stage { gap: calc(2.2dvh * var(--fit)); padding-left: 6vw; padding-right: 6vw; }
+.topo { flex: 1 1 auto; min-height: 0; }
+.cap { text-align: left; }
+.cap h1 { margin: 0; font-family: "Barlow Condensed", "Arial Narrow", sans-serif; font-weight: 500; font-size: clamp(20px, 5.6vw, 24px); letter-spacing: 0.01em; color: #f4efe6; }
+.cap p { margin: 0.25em 0 0; font-size: clamp(11.5px, 3.2vw, 13.5px); color: rgba(236, 230, 220, 0.55); line-height: 1.35; }
+</style>
+</head>
+<body>
+<canvas id="fx" aria-hidden="true"></canvas>
+
+<main id="stage">
+  <div class="topo" id="topo" role="img" aria-label="Stylised profile of the Gouffre Berger from the entrance to the bottom at minus 1122 metres, with a caver's light descending"></div>
+  <div class="cap">
+    <h1>Gouffre Berger</h1>
+    <p>Vercors, Isère<br>The first cave explored beyond −1000 m, in 1956</p>
+  </div>
+</main>
+
+<div id="night"></div>
+
+<script>
+/* ---------- art core: animation loop, battery modes, night dimming, drift (no timetable) ---------- */
+const Art = (() => {
+  "use strict";
+  const root = document.documentElement;
+  const $ = (id) => document.getElementById(id);
+  const TAU = Math.PI * 2;
+  let power = (window.__power && window.__power.mode) || "full";
+  root.dataset.power = power;
+  window.addEventListener("wallpaper-power", (e) => {
+    power = (e.detail && e.detail.mode) || "full";
+    root.dataset.power = power;
+  });
+  const NIGHT_FROM = 23 * 60, NIGHT_TO = 7 * 60, NIGHT_BRIGHTNESS = 0.45;
+  let night = null;
+  function updateNight() {
+    const d = new Date(), m = d.getHours() * 60 + d.getMinutes();
+    const n = m >= NIGHT_FROM || m < NIGHT_TO;
+    if (n !== night) {
+      night = n;
+      root.classList.toggle("night", n);
+      $("night").style.opacity = n ? String(1 - NIGHT_BRIGHTNESS) : "0";
+    }
+  }
+  const share = () => (power === "saver" ? 0.2 : power === "eco" ? 0.5 : 1);
+  const frameSkip = () => (power === "saver" ? 4 : power === "eco" || night ? 2 : 1);
+  const driftAt = (t) => [Math.sin(t / 173) * 6, Math.cos(t / 241) * 8];
+  const reduce = !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+
+  function start(design) {
+    const cvs = $("fx"), ctx = cvs.getContext("2d"), stage = $("stage");
+    let W = 0, H = 0, dpr = 1;
+    function resize() {
+      dpr = Math.min(2, window.devicePixelRatio || 1);
+      W = window.innerWidth; H = window.innerHeight;
+      cvs.width = Math.round(W * dpr); cvs.height = Math.round(H * dpr);
+      cvs.style.width = W + "px"; cvs.style.height = H + "px";
+      design.resize(W, H, dpr);
+    }
+    let last = 0, frameNo = 0;
+    function frame(ts) {
+      requestAnimationFrame(frame);
+      frameNo++;
+      if (frameNo % frameSkip()) return;
+      const dt = last ? Math.min(0.05, (ts - last) / 1000) : 0.016;
+      last = ts;
+      if (!W) return;
+      const [dx, dy] = driftAt(Date.now() / 1000);
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.clearRect(0, 0, W, H);
+      ctx.translate(dx, dy);
+      ctx.globalAlpha = 1;
+      ctx.globalCompositeOperation = "source-over";
+      design.frame(ctx, dt, ts / 1000, W, H);
+      ctx.globalAlpha = 1;
+      ctx.globalCompositeOperation = "source-over";
+    }
+    function drift() {
+      const [dx, dy] = driftAt(Date.now() / 1000);
+      if (stage) stage.style.transform = `translate(${dx.toFixed(1)}px, ${dy.toFixed(1)}px)`;
+    }
+    updateNight(); setInterval(updateNight, 30000);
+    drift(); setInterval(drift, 6000);
+    resize();
+    window.addEventListener("resize", resize);
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(resize);
+    requestAnimationFrame(frame);
+  }
+  return { start, $, TAU, share, reduce, get power() { return power; }, get night() { return !!night; } };
+})();
+
+/* ---------- Berger: a survey-style profile with a caver's light making the descent ---------- */
+(() => {
+  "use strict";
+  const A = Art, $ = A.$;
+  const MAX = 1122;
+  // stylised centre line: [x as share of width, depth in m, passage width in px, kind]
+  const PATH = [
+    [0.20, 0, 14], [0.20, 12, 9], [0.20, 40, 5, "pitch"], [0.25, 48, 6], [0.25, 73, 5, "pitch"],
+    [0.31, 82, 6], [0.31, 138, 5, "pitch"], [0.37, 148, 6], [0.37, 172, 5, "pitch"],
+    [0.42, 186, 6], [0.42, 229, 5, "pitch"], [0.44, 234, 12], [0.56, 280, 16], [0.46, 340, 18],
+    [0.40, 420, 15], [0.34, 500, 15], [0.24, 630, 8], [0.33, 700, 8], [0.22, 760, 10],
+    [0.22, 850, 5, "pitch"], [0.32, 880, 6], [0.27, 1000, 5, "pitch"], [0.36, 1050, 6], [0.41, 1122, 7],
+  ];
+  const MARKS = [
+    { d: 0, name: "Entrance", num: "0 m" },
+    { d: 234, name: "Grande Galerie", num: "−234" },
+    { d: 280, name: "Lac Cadoux", num: "−280" },
+    { d: 340, name: "Salle Bourgin", num: "−340" },
+    { d: 500, name: "Salle des Treize", num: "−500" },
+    { d: 630, name: "Vestiaire", num: "−630" },
+    { d: 760, name: "Salle des Toxasters", num: "−760" },
+    { d: 1000, name: "−1000 m, 1956", num: "" },
+    { d: 1122, name: "The bottom", num: "−1122" },
+  ];
+  let box = null, pts = [], segLen = [], total = 0, layer = null, W0 = 0, H0 = 0, DPR = 1;
+  const drips = [];
+  let light = 0, pause = 0;
+
+  function geometry() {
+    const r = $("topo").getBoundingClientRect();
+    box = { x: r.left, y: r.top + 8, w: r.width, h: r.height - 16 };
+    pts = PATH.map(([fx, d, w, kind]) => ({ x: box.x + fx * box.w, y: box.y + (d / MAX) * box.h, w, d, kind }));
+    segLen = []; total = 0;
+    for (let i = 1; i < pts.length; i++) { const l = Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y); segLen.push(l); total += l; }
+  }
+  const yAt = (d) => box.y + (d / MAX) * box.h;
+  function xAtDepth(d) {
+    for (let i = 1; i < pts.length; i++) if (pts[i].d >= d) {
+      const a = pts[i - 1], b = pts[i], q = (d - a.d) / Math.max(1, b.d - a.d);
+      return a.x + (b.x - a.x) * q;
+    }
+    return pts[pts.length - 1].x;
+  }
+  function along(s) {               // point at arc length s
+    for (let i = 0; i < segLen.length; i++) {
+      if (s <= segLen[i]) { const q = s / segLen[i], a = pts[i], b = pts[i + 1]; return { x: a.x + (b.x - a.x) * q, y: a.y + (b.y - a.y) * q, d: a.d + (b.d - a.d) * q }; }
+      s -= segLen[i];
+    }
+    const p = pts[pts.length - 1]; return { x: p.x, y: p.y, d: p.d };
+  }
+
+  function drawStatic() {
+    layer = document.createElement("canvas");
+    layer.width = Math.round(W0 * DPR); layer.height = Math.round(H0 * DPR);
+    const c = layer.getContext("2d");
+    c.scale(DPR, DPR);
+    c.lineCap = "round"; c.lineJoin = "round";
+    // depth scale
+    const sx = box.x + 2;
+    c.strokeStyle = "rgba(236,230,220,0.28)"; c.lineWidth = 1;
+    c.beginPath(); c.moveTo(sx, box.y); c.lineTo(sx, box.y + box.h); c.stroke();
+    c.font = "400 10px 'Barlow Condensed', 'Arial Narrow', sans-serif";
+    c.fillStyle = "rgba(236,230,220,0.42)"; c.textBaseline = "middle";
+    for (let d = 0; d <= 1100; d += 50) {
+      const y = yAt(d), major = d % 200 === 0;
+      c.beginPath(); c.moveTo(sx, y); c.lineTo(sx + (major ? 7 : 3.5), y); c.stroke();
+      if (major) c.fillText(d === 0 ? "0" : `−${d}`, sx + 10, y);
+    }
+    // passage walls: a bright pass, then a dark pass inside, so every passage reads as a tube
+    const tube = (extra, style) => {
+      c.strokeStyle = style;
+      for (let i = 1; i < pts.length; i++) {
+        c.lineWidth = Math.max(pts[i - 1].w, pts[i].w) * 0.5 + pts[i].w * 0.5 + extra;
+        c.beginPath(); c.moveTo(pts[i - 1].x, pts[i - 1].y); c.lineTo(pts[i].x, pts[i].y); c.stroke();
+      }
+    };
+    tube(2.2, "rgba(236,230,220,0.85)");
+    // the two big chambers
+    const room = (d, rx, ry, dx) => { c.beginPath(); c.ellipse(xAtDepth(d) + dx, yAt(d), rx, ry, -0.25, 0, A.TAU); };
+    c.fillStyle = "rgba(236,230,220,0.85)";
+    room(500, 26, 15, 6); c.fill(); room(340, 20, 11, 0); c.fill();
+    tube(0, "#000000");
+    c.fillStyle = "#000000";
+    room(500, 24.8, 13.8, 6); c.fill(); room(340, 18.8, 9.8, 0); c.fill();
+    // water: Lac Cadoux and the final sump
+    c.fillStyle = "rgba(90,170,220,0.55)";
+    c.beginPath(); c.ellipse(xAtDepth(280), yAt(280) + 3, 9, 3.2, 0, 0, A.TAU); c.fill();
+    c.beginPath(); c.ellipse(xAtDepth(1122) + 2, yAt(1122) + 1, 7, 3.4, 0, 0, A.TAU); c.fill();
+    // concretions in the Salle des Treize
+    c.strokeStyle = "rgba(236,230,220,0.5)"; c.lineWidth = 1;
+    for (const [ox, h] of [[-12, 6], [-4, 9], [5, 5], [13, 8]]) {
+      const x = xAtDepth(500) + 6 + ox, y = yAt(500) + 12;
+      c.beginPath(); c.moveTo(x, y); c.lineTo(x, y - h); c.stroke();
+    }
+    // landmarks in one column on the right, with dotted leader lines
+    const col = box.x + box.w * 0.62;
+    for (const m of MARKS) {
+      const y = yAt(m.d), x = xAtDepth(m.d) + (m.d === 500 ? 34 : m.d === 340 ? 22 : 12);
+      c.save();
+      c.setLineDash([1.5, 3]); c.strokeStyle = "rgba(236,230,220,0.35)"; c.lineWidth = 0.8;
+      c.beginPath(); c.moveTo(x, y); c.lineTo(col - 6, y); c.stroke();
+      c.restore();
+      c.textAlign = "left";
+      c.font = "500 12px 'Barlow Condensed', 'Arial Narrow', sans-serif";
+      c.fillStyle = "#f4efe6";
+      c.fillText(m.name, col, y);
+      if (m.num) {
+        const w = c.measureText(m.name).width;
+        c.font = "400 11px 'Barlow Condensed', 'Arial Narrow', sans-serif";
+        c.fillStyle = "rgba(236,230,220,0.5)";
+        c.fillText(m.num, col + w + 5, y);
+      }
+    }
+    c.textAlign = "left";
+  }
+
+  const design = {
+    resize(W, H, dpr) { W0 = W; H0 = H; DPR = dpr; geometry(); drawStatic(); },
+
+    frame(ctx, dt, t) {
+      if (!layer) return;
+      ctx.drawImage(layer, 0, 0, W0, H0);
+
+      // the river from the Vestiaire down, flowing
+      ctx.save();
+      ctx.setLineDash([2, 6]); ctx.lineDashOffset = -t * 14;
+      ctx.strokeStyle = "rgba(110,185,230,0.6)"; ctx.lineWidth = 1.1;
+      ctx.beginPath();
+      let started = false;
+      for (const p of pts) if (p.d >= 630) { if (!started) { ctx.moveTo(p.x, p.y); started = true; } else ctx.lineTo(p.x, p.y); }
+      ctx.stroke(); ctx.restore();
+
+      // drips in the pitches
+      if (A.power !== "saver" && !A.reduce && Math.random() < dt * 6 * A.share()) {
+        const i = 1 + Math.floor(Math.random() * (pts.length - 1));
+        if (pts[i].kind === "pitch") drips.push({ x: pts[i].x + (Math.random() - 0.5) * 2, y: pts[i - 1].y, end: pts[i].y, v: 20 });
+      }
+      ctx.fillStyle = "rgba(170,215,240,0.75)";
+      for (let k = drips.length - 1; k >= 0; k--) {
+        const d = drips[k];
+        d.v += 260 * dt; d.y += d.v * dt;
+        if (d.y > d.end) { drips.splice(k, 1); continue; }
+        ctx.fillRect(d.x - 0.5, d.y, 1, 2.5);
+      }
+
+      // the caver's light: about three minutes from the entrance to the bottom
+      if (!A.reduce) {
+        if (pause > 0) pause -= dt;
+        else { light += dt * total / 180; if (light >= total) { light = total; pause = 6; } }
+        if (pause < 0 && light >= total) { light = 0; pause = 0; }
+      } else light = total * 0.45;
+      if (pause <= 0 && light >= total) { light = 0; }
+      const p = along(light);
+      const fade = light >= total ? Math.max(0, pause / 6) : Math.min(1, light / 30 + 0.2);
+      ctx.globalCompositeOperation = "lighter";
+      const g = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, 46);
+      g.addColorStop(0, `rgba(255,196,120,${0.55 * fade})`);
+      g.addColorStop(0.25, `rgba(255,170,90,${0.22 * fade})`);
+      g.addColorStop(1, "rgba(255,150,70,0)");
+      ctx.fillStyle = g; ctx.fillRect(p.x - 46, p.y - 46, 92, 92);
+      ctx.globalCompositeOperation = "source-over";
+      ctx.globalAlpha = fade;
+      ctx.fillStyle = "#fff4e2";
+      ctx.beginPath(); ctx.arc(p.x, p.y, 2, 0, A.TAU); ctx.fill();
+      // its depth, read on the scale
+      const sy = p.y;
+      ctx.strokeStyle = "rgba(255,196,120,0.55)"; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(box.x + 2, sy); ctx.lineTo(box.x + 9, sy); ctx.stroke();
+      ctx.font = "500 11px 'Barlow Condensed', 'Arial Narrow', sans-serif";
+      ctx.textBaseline = "middle"; ctx.textAlign = "left";
+      const tag = `−${Math.round(p.d)} m`, tw = ctx.measureText(tag).width;
+      ctx.fillStyle = "#000000"; ctx.fillRect(box.x + 9, sy - 7, tw + 8, 14);
+      ctx.fillStyle = "#ffc478"; ctx.fillText(tag, box.x + 12, sy);
+      ctx.globalAlpha = 1;
+    },
+  };
+  Art.start(design);
+})();
+</script>
+</body>
+</html>
