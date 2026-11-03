@@ -277,7 +277,7 @@ const CONFIG = {
 
   nightDim: { from: "23:00", to: "07:00", brightness: 0.3 },
   decimals: { big: 6, small: 5 },
-  particles: 36,
+  particles: 80,
 
   // free space left for the status bar / clock (top) and app dock (bottom)
   layout: { topSpace: "22dvh", bottomSpace: "15.5dvh" },
@@ -558,7 +558,7 @@ const CONFIG = {
       updateNight(dNow);
     }
   }
-  (function loop() { update(); setTimeout(loop, night ? 500 : 160); })();
+  (function loop() { update(); setTimeout(loop, night ? 400 : 60); })();
 
   /* ---------- burn-in protection: slow drift ---------- */
   const stage = $("stage");
@@ -627,7 +627,7 @@ const CONFIG = {
       a: 0.12 + Math.random() * 0.45, tw: 0.4 + Math.random() * 1.4, c: pick(palette),
     };
   }
-  const orbit = Array.from({ length: reduce ? 12 : 34 }, () => ({
+  const orbit = Array.from({ length: reduce ? 16 : 56 }, () => ({
     ang: Math.random() * TAU,
     w: (0.03 + Math.random() * 0.1) * (Math.random() < 0.85 ? 1 : -1),
     off: 1.1 + (Math.random() - 0.5) * 0.14,
@@ -636,16 +636,16 @@ const CONFIG = {
   }));
   const sparks = [];
   function spawnSpark(x, y, vx, vy, color, life, size) {
-    if (sparks.length > 140) return;
+    if (sparks.length > 260) return;
     sparks.push({ x, y, vx, vy, c: color, life, t: 0, s: size });
   }
 
-  let tipAcc = 0, liveAcc = 0, last = 0;
+  let tipAcc = 0, liveAcc = 0, last = 0, frameNo = 0;
   function frame(ts) {
     requestAnimationFrame(frame);
-    const minDt = night ? 66 : 42;
-    if (ts - last < minDt) return;
-    const dt = last ? Math.min(0.1, (ts - last) / 1000) : 0.033;
+    frameNo++;
+    if (night && frameNo % 2) return; // every frame by day, every other frame at night
+    const dt = last ? Math.min(0.05, (ts - last) / 1000) : 0.016;
     last = ts;
     const t = ts / 1000;
     if (!W) return;
@@ -673,7 +673,7 @@ const CONFIG = {
       }
       // sparks leaving the tip of the big ring
       if (heroP > 0 && heroP < 1 && !reduce) {
-        tipAcc += dt * 3.2;
+        tipAcc += dt * 6;
         while (tipAcc >= 1) {
           tipAcc -= 1;
           const a = -Math.PI / 2 + heroP * TAU;
@@ -686,7 +686,7 @@ const CONFIG = {
 
     // sparks around the course you are in right now
     if (liveAnchor && !reduce) {
-      liveAcc += dt * 12;
+      liveAcc += dt * 18;
       while (liveAcc >= 1) {
         liveAcc -= 1;
         const a = Math.random() * TAU;
