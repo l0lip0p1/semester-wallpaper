@@ -1,0 +1,234 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#05060b">
+<title>Poèmes</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;1,400&display=swap" rel="stylesheet">
+<style>
+:root {
+  color-scheme: dark;
+  --fit: 1;
+  --top-space: 20dvh;
+  --bottom-space: 19dvh;
+  box-sizing: border-box;
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { color-scheme: dark; } }
+:root[data-theme="dark"] { color-scheme: dark; }
+html { scroll-padding-top: env(safe-area-inset-top, 0px); }
+html, body { height: 100%; margin: 0; }
+body { overflow: hidden; user-select: none; -webkit-user-select: none; -webkit-tap-highlight-color: transparent; }
+#fx { position: fixed; inset: 0; z-index: 0; pointer-events: none; }
+#stage {
+  position: relative; z-index: 1;
+  height: 100%; max-width: 520px; margin: 0 auto;
+  box-sizing: border-box;
+  padding: var(--top-space) 6vw var(--bottom-space);
+  display: flex; flex-direction: column; justify-content: center;
+  gap: calc(3.2dvh * var(--fit));
+  transition: transform 6s linear;
+}
+#stage > * { flex-shrink: 0; }
+#night { position: fixed; inset: 0; z-index: 5; pointer-events: none; background: #000000; opacity: 0; transition: opacity 90s linear; }
+:root[data-power="saver"] *, :root[data-power="saver"] *::before, :root[data-power="saver"] *::after { animation-play-state: paused !important; }
+
+body { background: #05060b; color: #efe9df; font-family: "EB Garamond", Garamond, Georgia, serif; }
+#stage { justify-content: center; padding-left: 7vw; padding-right: 7vw; }
+.poem { text-align: center; }
+.verses { margin: 0; font-style: italic; font-size: clamp(19px, 5.4vw, 24px); line-height: 1.55; color: #f3eee6; }
+.verses span { display: block; white-space: nowrap; opacity: 0; filter: blur(6px); transform: translateY(4px); transition: opacity 2.2s ease, filter 2.2s ease, transform 2.2s ease; }
+.verses span.in { opacity: 1; filter: blur(0); transform: none; }
+.rule { width: 34px; height: 1px; margin: 1.6em auto 1.1em; background: rgba(239, 233, 223, 0.35); opacity: 0; transition: opacity 2s ease 0.4s; }
+.by { margin: 0; font-size: clamp(14px, 3.9vw, 16px); font-variant: small-caps; letter-spacing: 0.06em; color: rgba(239, 233, 223, 0.82); opacity: 0; transition: opacity 2s ease 0.6s; }
+.src { margin: 0.25em 0 0; font-style: italic; font-size: clamp(12.5px, 3.5vw, 14px); color: rgba(239, 233, 223, 0.5); opacity: 0; transition: opacity 2s ease 0.8s; }
+.poem.shown .rule, .poem.shown .by, .poem.shown .src { opacity: 1; }
+.poem.out .verses span, .poem.out .rule, .poem.out .by, .poem.out .src { opacity: 0; transition-delay: 0s; transition-duration: 1.4s; }
+@media (prefers-reduced-motion: reduce) { .verses span, .rule, .by, .src { transition: none; filter: none; transform: none; } }
+</style>
+</head>
+<body>
+<canvas id="fx" aria-hidden="true"></canvas>
+
+<main id="stage">
+  <div class="poem" id="poem" aria-live="polite">
+    <p class="verses" id="verses"></p>
+    <div class="rule"></div>
+    <p class="by" id="by"></p>
+    <p class="src" id="src"></p>
+  </div>
+</main>
+
+<div id="night"></div>
+
+<script>
+/* ---------- art core: animation loop, battery modes, night dimming, drift (no timetable) ---------- */
+const Art = (() => {
+  "use strict";
+  const root = document.documentElement;
+  const $ = (id) => document.getElementById(id);
+  const TAU = Math.PI * 2;
+  let power = (window.__power && window.__power.mode) || "full";
+  root.dataset.power = power;
+  window.addEventListener("wallpaper-power", (e) => {
+    power = (e.detail && e.detail.mode) || "full";
+    root.dataset.power = power;
+  });
+  const NIGHT_FROM = 23 * 60, NIGHT_TO = 7 * 60, NIGHT_BRIGHTNESS = 0.45;
+  let night = null;
+  function updateNight() {
+    const d = new Date(), m = d.getHours() * 60 + d.getMinutes();
+    const n = m >= NIGHT_FROM || m < NIGHT_TO;
+    if (n !== night) {
+      night = n;
+      root.classList.toggle("night", n);
+      $("night").style.opacity = n ? String(1 - NIGHT_BRIGHTNESS) : "0";
+    }
+  }
+  const share = () => (power === "saver" ? 0.2 : power === "eco" ? 0.5 : 1);
+  const frameSkip = () => (power === "saver" ? 4 : power === "eco" || night ? 2 : 1);
+  const driftAt = (t) => [Math.sin(t / 173) * 6, Math.cos(t / 241) * 8];
+  const reduce = !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+
+  function start(design) {
+    const cvs = $("fx"), ctx = cvs.getContext("2d"), stage = $("stage");
+    let W = 0, H = 0, dpr = 1;
+    function resize() {
+      dpr = Math.min(2, window.devicePixelRatio || 1);
+      W = window.innerWidth; H = window.innerHeight;
+      cvs.width = Math.round(W * dpr); cvs.height = Math.round(H * dpr);
+      cvs.style.width = W + "px"; cvs.style.height = H + "px";
+      design.resize(W, H, dpr);
+    }
+    let last = 0, frameNo = 0;
+    function frame(ts) {
+      requestAnimationFrame(frame);
+      frameNo++;
+      if (frameNo % frameSkip()) return;
+      const dt = last ? Math.min(0.05, (ts - last) / 1000) : 0.016;
+      last = ts;
+      if (!W) return;
+      const [dx, dy] = driftAt(Date.now() / 1000);
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.clearRect(0, 0, W, H);
+      ctx.translate(dx, dy);
+      ctx.globalAlpha = 1;
+      ctx.globalCompositeOperation = "source-over";
+      design.frame(ctx, dt, ts / 1000, W, H);
+      ctx.globalAlpha = 1;
+      ctx.globalCompositeOperation = "source-over";
+    }
+    function drift() {
+      const [dx, dy] = driftAt(Date.now() / 1000);
+      if (stage) stage.style.transform = `translate(${dx.toFixed(1)}px, ${dy.toFixed(1)}px)`;
+    }
+    updateNight(); setInterval(updateNight, 30000);
+    drift(); setInterval(drift, 6000);
+    resize();
+    window.addEventListener("resize", resize);
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(resize);
+    requestAnimationFrame(frame);
+  }
+  return { start, $, TAU, share, reduce, get power() { return power; }, get night() { return !!night; } };
+})();
+
+/* ---------- Poèmes: one passage of French poetry each hour, under a slow night sky ---------- */
+(() => {
+  "use strict";
+  const A = Art, $ = A.$;
+  const S = "\u202f";   // narrow no-break space before ! ? : ; as in French typography
+  // all first published long before 1929, so free to use
+  const POEMS = [
+    { by: "Victor Hugo", src: "« Demain, dès l'aube… », Les Contemplations, 1856",
+      v: ["Demain, dès l'aube, à l'heure où blanchit la campagne,", "Je partirai. Vois-tu, je sais que tu m'attends."] },
+    { by: "Arthur Rimbaud", src: "« Ma Bohème », 1870",
+      v: ["Mon auberge était à la Grande-Ourse.", "– Mes étoiles au ciel avaient un doux frou-frou"] },
+    { by: "Charles Baudelaire", src: "« L'Invitation au voyage », Les Fleurs du mal, 1857",
+      v: ["Là, tout n'est qu'ordre et beauté,", "Luxe, calme et volupté."] },
+    { by: "Paul Verlaine", src: "« Chanson d'automne », Poèmes saturniens, 1866",
+      v: ["Les sanglots longs", "Des violons", "De l'automne", "Blessent mon cœur", "D'une langueur", "Monotone."] },
+    { by: "Victor Hugo", src: "« Booz endormi », La Légende des siècles, 1859",
+      v: ["Quel dieu, quel moissonneur de l'éternel été,", "Avait, en s'en allant, négligemment jeté", "Cette faucille d'or dans le champ des étoiles."] },
+    { by: "Arthur Rimbaud", src: "« Sensation », 1870",
+      v: ["Par les soirs bleus d'été, j'irai dans les sentiers,", `Picoté par les blés, fouler l'herbe menue${S}:`, "Rêveur, j'en sentirai la fraîcheur à mes pieds.", "Je laisserai le vent baigner ma tête nue."] },
+    { by: "Alphonse de Lamartine", src: "« Le Lac », Méditations poétiques, 1820",
+      v: [`Ô temps${S}! suspends ton vol, et vous, heures propices${S}!`, `Suspendez votre cours${S}:`, "Laissez-nous savourer les rapides délices", `Des plus beaux de nos jours${S}!`] },
+    { by: "Paul Verlaine", src: "« Clair de lune », Fêtes galantes, 1869",
+      v: ["Au calme clair de lune triste et beau,", "Qui fait rêver les oiseaux dans les arbres", "Et sangloter d'extase les jets d'eau,", "Les grands jets d'eau sveltes parmi les marbres."] },
+    { by: "Guillaume Apollinaire", src: "« Le Pont Mirabeau », Alcools, 1913",
+      v: ["Vienne la nuit sonne l'heure", "Les jours s'en vont je demeure"] },
+    { by: "Charles Baudelaire", src: "« Élévation », Les Fleurs du mal, 1857",
+      v: ["Au-dessus des étangs, au-dessus des vallées,", "Des montagnes, des bois, des nuages, des mers,", "Par delà le soleil, par delà les éthers,", "Par delà les confins des sphères étoilées,"] },
+    { by: "Arthur Rimbaud", src: "« Aube », Illuminations, 1886",
+      v: ["J'ai embrassé l'aube d'été."] },
+    { by: "Gérard de Nerval", src: "« El Desdichado », Les Chimères, 1854",
+      v: ["Ma seule étoile est morte, – et mon luth constellé", "Porte le Soleil noir de la Mélancolie."] },
+    { by: "Arthur Rimbaud", src: "« Le Bateau ivre », 1871",
+      v: ["Et dès lors, je me suis baigné dans le Poème", "De la Mer, infusé d'astres, et lactescent,"] },
+    { by: "Charles Baudelaire", src: "« Harmonie du soir », Les Fleurs du mal, 1857",
+      v: ["Voici venir les temps où vibrant sur sa tige", `Chaque fleur s'évapore ainsi qu'un encensoir${S};`] },
+  ];
+  let W = 0, H = 0, shownHour = -1;
+  const stars = [];
+  const rnd = (a, b) => a + Math.random() * (b - a);
+
+  function pick(d) {
+    const start = new Date(d.getFullYear(), 0, 0);
+    const day = Math.floor((d - start) / 86400000);
+    return POEMS[(day * 24 + d.getHours()) % POEMS.length];
+  }
+  function show(p) {
+    const box = $("poem");
+    box.classList.add("out");
+    setTimeout(() => {
+      box.classList.remove("out", "shown");
+      $("verses").innerHTML = "";
+      const curly = (x) => x.replace(/'/g, "\u2019");
+      for (const line of p.v) { const s = document.createElement("span"); s.textContent = curly(line); $("verses").appendChild(s); }
+      $("by").textContent = p.by;
+      $("src").textContent = curly(p.src);
+      const spans = [...$("verses").children];
+      // every verse on one line: shrink the type until the longest one fits
+      const vs = $("verses");
+      vs.style.fontSize = "";
+      const room = box.clientWidth, widest = Math.max(...spans.map((x) => x.scrollWidth));
+      if (widest > room) vs.style.fontSize = `${parseFloat(getComputedStyle(vs).fontSize) * room / widest * 0.98}px`;
+      spans.forEach((s, i) => setTimeout(() => s.classList.add("in"), 300 + i * (A.reduce ? 0 : 650)));
+      setTimeout(() => box.classList.add("shown"), 300 + spans.length * (A.reduce ? 0 : 650));
+    }, shownHour < 0 ? 0 : 1500);
+  }
+
+  const design = {
+    resize(w, h) {
+      W = w; H = h;
+      stars.length = 0;
+      for (let k = 0; k < 160; k++) stars.push({ x: Math.random() * W, y: Math.random() * H, r: 0.3 + Math.pow(Math.random(), 3) * 1.1, ph: rnd(0, 6), tw: rnd(0.3, 1.2), vx: rnd(1.2, 2.6) });
+    },
+    frame(ctx, dt, t) {
+      const now = new Date();
+      if (now.getHours() !== shownHour) { show(pick(now)); shownHour = now.getHours(); }
+      // a faint warm light behind the words
+      const g = ctx.createRadialGradient(W / 2, H * 0.5, 0, W / 2, H * 0.5, H * 0.45);
+      g.addColorStop(0, "rgba(120,95,70,0.12)"); g.addColorStop(1, "rgba(120,95,70,0)");
+      ctx.fillStyle = g; ctx.fillRect(-10, -10, W + 20, H + 20);
+      // the sky turns very slowly
+      const n = Math.round(stars.length * A.share());
+      ctx.fillStyle = "#e9ecff";
+      for (let k = 0; k < n; k++) {
+        const s = stars[k];
+        if (!A.reduce) { s.x += s.vx * dt; if (s.x > W + 4) s.x = -4; }
+        ctx.globalAlpha = 0.18 + 0.35 * (0.5 + 0.5 * Math.sin(t * s.tw + s.ph));
+        ctx.beginPath(); ctx.arc(s.x, s.y, s.r, 0, A.TAU); ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+    },
+  };
+  Art.start(design);
+})();
+</script>
+</body>
+</html>
