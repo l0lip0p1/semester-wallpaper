@@ -1,0 +1,393 @@
+name: Build wallpaper app
+
+on:
+  push:
+    paths:
+      - ".github/workflows/build.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Get the repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Write the app
+        run: |
+          mkdir -p app/src/io/github/semesterwallpaper app/res/drawable app/res/xml app/assets
+
+          cat > app/AndroidManifest.xml <<'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android"
+              package="io.github.semesterwallpaper">
+              <uses-permission android:name="android.permission.INTERNET" />
+              <uses-feature android:name="android.software.live_wallpaper" android:required="true" />
+              <application
+                  android:label="Semester Wallpaper"
+                  android:icon="@drawable/ic"
+                  android:allowBackup="false"
+                  android:hardwareAccelerated="true">
+                  <activity
+                      android:name=".SetupActivity"
+                      android:exported="true"
+                      android:theme="@android:style/Theme.Translucent.NoTitleBar">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
+                      </intent-filter>
+                  </activity>
+                  <service
+                      android:name=".WallpaperSvc"
+                      android:exported="true"
+                      android:label="Semester Wallpaper"
+                      android:permission="android.permission.BIND_WALLPAPER">
+                      <intent-filter>
+                          <action android:name="android.service.wallpaper.WallpaperService" />
+                      </intent-filter>
+                      <meta-data android:name="android.service.wallpaper" android:resource="@xml/wallpaper" />
+                  </service>
+              </application>
+          </manifest>
+          EOF
+
+          cat > app/res/xml/wallpaper.xml <<'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <wallpaper xmlns:android="http://schemas.android.com/apk/res/android"
+              android:thumbnail="@drawable/ic" />
+          EOF
+
+          cat > app/res/drawable/ic.xml <<'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <vector xmlns:android="http://schemas.android.com/apk/res/android"
+              android:width="108dp" android:height="108dp"
+              android:viewportWidth="108" android:viewportHeight="108">
+              <path android:fillColor="#000000" android:pathData="M0,0h108v108h-108z" />
+              <path android:strokeColor="#3300E5FF" android:strokeWidth="7"
+                  android:pathData="M54,28 a26,26 0 1,1 -0.01,0" />
+              <path android:strokeColor="#FF2BD6" android:strokeWidth="7" android:strokeLineCap="round"
+                  android:pathData="M54,28 A26,26 0 1,1 28,54" />
+          </vector>
+          EOF
+
+          cat > app/src/io/github/semesterwallpaper/SetupActivity.java <<'EOF'
+          package io.github.semesterwallpaper;
+
+          import android.app.Activity;
+          import android.app.WallpaperManager;
+          import android.content.ComponentName;
+          import android.content.Intent;
+          import android.os.Bundle;
+          import android.widget.Toast;
+
+          // Tapping the app icon opens the wallpaper preview with a "Set" button.
+          public class SetupActivity extends Activity {
+              @Override
+              protected void onCreate(Bundle state) {
+                  super.onCreate(state);
+                  try {
+                      Intent i = new Intent(WallpaperManager.ACTION_CHANGE_LIVE_WALLPAPER);
+                      i.putExtra(WallpaperManager.EXTRA_LIVE_WALLPAPER_COMPONENT,
+                              new ComponentName(this, WallpaperSvc.class));
+                      startActivity(i);
+                  } catch (Exception e) {
+                      try {
+                          startActivity(new Intent(WallpaperManager.ACTION_LIVE_WALLPAPER_CHOOSER));
+                      } catch (Exception e2) {
+                          Toast.makeText(this, "Choose Semester Wallpaper in Settings > Wallpaper",
+                                  Toast.LENGTH_LONG).show();
+                      }
+                  }
+                  finish();
+              }
+          }
+          EOF
+
+          cat > app/src/io/github/semesterwallpaper/WallpaperSvc.java <<'EOF'
+          package io.github.semesterwallpaper;
+
+          import android.app.Presentation;
+          import android.content.Context;
+          import android.graphics.Color;
+          import android.graphics.drawable.ColorDrawable;
+          import android.hardware.display.DisplayManager;
+          import android.hardware.display.VirtualDisplay;
+          import android.os.Handler;
+          import android.os.Looper;
+          import android.service.wallpaper.WallpaperService;
+          import android.view.SurfaceHolder;
+          import android.view.ViewGroup;
+          import android.webkit.WebSettings;
+          import android.webkit.WebView;
+          import android.webkit.WebViewClient;
+
+          import java.io.ByteArrayOutputStream;
+          import java.io.File;
+          import java.io.FileInputStream;
+          import java.io.FileOutputStream;
+          import java.io.InputStream;
+          import java.net.HttpURLConnection;
+          import java.net.URL;
+
+          // Live wallpaper that shows index.html. The page is drawn by a WebView placed on a
+          // private virtual display whose output is the wallpaper surface.
+          // It re-downloads index.html from GitHub (at most every 30 min) so edits show up
+          // without reinstalling the app, and keeps the last copy for offline use.
+          public class WallpaperSvc extends WallpaperService {
+              static final String PAGE_URL = "__PAGE_URL__";
+              static final String BASE_URL = "https://semester.wallpaper/";
+              static final long CHECK_EVERY_MS = 30L * 60L * 1000L;
+
+              static volatile long lastCheck = 0L;
+              static volatile String latest = null;
+
+              @Override
+              public Engine onCreateEngine() {
+                  return new PageEngine();
+              }
+
+              static String readAll(InputStream in) throws Exception {
+                  try {
+                      ByteArrayOutputStream out = new ByteArrayOutputStream();
+                      byte[] buf = new byte[16384];
+                      int n;
+                      while ((n = in.read(buf)) > 0) out.write(buf, 0, n);
+                      return new String(out.toByteArray(), "UTF-8");
+                  } finally {
+                      in.close();
+                  }
+              }
+
+              File cacheFile() {
+                  return new File(getFilesDir(), "page.html");
+              }
+
+              String localPage() {
+                  if (latest != null) return latest;
+                  try {
+                      File f = cacheFile();
+                      if (f.exists()) return readAll(new FileInputStream(f));
+                  } catch (Exception ignored) { }
+                  try {
+                      return readAll(getAssets().open("index.html"));
+                  } catch (Exception e) {
+                      return "<!doctype html><html><body style=\"background:#000\"></body></html>";
+                  }
+              }
+
+              static String remotePage() {
+                  HttpURLConnection c = null;
+                  try {
+                      c = (HttpURLConnection) new URL(PAGE_URL + "?t=" + System.currentTimeMillis()).openConnection();
+                      c.setConnectTimeout(10000);
+                      c.setReadTimeout(15000);
+                      c.setUseCaches(false);
+                      if (c.getResponseCode() != 200) return null;
+                      String html = readAll(c.getInputStream());
+                      return html.contains("</html>") ? html : null;
+                  } catch (Exception e) {
+                      return null;
+                  } finally {
+                      if (c != null) c.disconnect();
+                  }
+              }
+
+              void saveCache(String html) {
+                  try {
+                      FileOutputStream out = new FileOutputStream(cacheFile());
+                      try {
+                          out.write(html.getBytes("UTF-8"));
+                      } finally {
+                          out.close();
+                      }
+                  } catch (Exception ignored) { }
+              }
+
+              class PageEngine extends Engine {
+                  final Handler main = new Handler(Looper.getMainLooper());
+                  VirtualDisplay display;
+                  Presentation presentation;
+                  WebView web;
+                  String current;
+                  boolean shown;
+                  int lastW, lastH;
+
+                  @Override
+                  public void onSurfaceChanged(SurfaceHolder holder, int format, int width, int height) {
+                      super.onSurfaceChanged(holder, format, width, height);
+                      if (width <= 0 || height <= 0) return;
+                      if (display != null && width == lastW && height == lastH) return;
+                      lastW = width;
+                      lastH = height;
+                      teardown();
+                      try {
+                          int dpi = getResources().getDisplayMetrics().densityDpi;
+                          DisplayManager dm = (DisplayManager) getSystemService(Context.DISPLAY_SERVICE);
+                          display = dm.createVirtualDisplay("semester-wallpaper", width, height, dpi,
+                                  holder.getSurface(), DisplayManager.VIRTUAL_DISPLAY_FLAG_OWN_CONTENT_ONLY);
+                          presentation = new Presentation(WallpaperSvc.this, display.getDisplay());
+                          presentation.getWindow().setBackgroundDrawable(new ColorDrawable(Color.BLACK));
+                          web = new WebView(presentation.getContext());
+                          web.setBackgroundColor(Color.BLACK);
+                          web.setVerticalScrollBarEnabled(false);
+                          web.setHorizontalScrollBarEnabled(false);
+                          WebSettings s = web.getSettings();
+                          s.setJavaScriptEnabled(true);
+                          s.setDomStorageEnabled(true);
+                          web.setWebViewClient(new WebViewClient());
+                          presentation.setContentView(web, new ViewGroup.LayoutParams(
+                                  ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+                          presentation.show();
+                          if (current == null) current = localPage();
+                          web.loadDataWithBaseURL(BASE_URL, current, "text/html", "utf-8", null);
+                          if (!shown) web.onPause();
+                      } catch (Exception e) {
+                          teardown();
+                      }
+                      checkForUpdate();
+                  }
+
+                  @Override
+                  public void onVisibilityChanged(boolean visible) {
+                      super.onVisibilityChanged(visible);
+                      shown = visible;
+                      if (web == null) return;
+                      if (visible) {
+                          web.onResume();
+                          if (latest != null && !latest.equals(current)) show(latest);
+                          checkForUpdate();
+                      } else {
+                          web.onPause();
+                      }
+                  }
+
+                  void show(String html) {
+                      current = html;
+                      if (web != null) web.loadDataWithBaseURL(BASE_URL, html, "text/html", "utf-8", null);
+                  }
+
+                  void checkForUpdate() {
+                      long now = System.currentTimeMillis();
+                      if (now - lastCheck < CHECK_EVERY_MS) return;
+                      lastCheck = now;
+                      new Thread(new Runnable() {
+                          @Override
+                          public void run() {
+                              final String fresh = remotePage();
+                              if (fresh == null) return;
+                              if (!fresh.equals(latest)) {
+                                  latest = fresh;
+                                  saveCache(fresh);
+                              }
+                              main.post(new Runnable() {
+                                  @Override
+                                  public void run() {
+                                      if (!fresh.equals(current)) show(fresh);
+                                  }
+                              });
+                          }
+                      }).start();
+                  }
+
+                  @Override
+                  public void onSurfaceDestroyed(SurfaceHolder holder) {
+                      teardown();
+                      lastW = 0;
+                      lastH = 0;
+                      super.onSurfaceDestroyed(holder);
+                  }
+
+                  @Override
+                  public void onDestroy() {
+                      teardown();
+                      super.onDestroy();
+                  }
+
+                  void teardown() {
+                      if (presentation != null) {
+                          try { presentation.dismiss(); } catch (Exception ignored) { }
+                          presentation = null;
+                      }
+                      if (web != null) {
+                          try { web.destroy(); } catch (Exception ignored) { }
+                          web = null;
+                      }
+                      if (display != null) {
+                          display.release();
+                          display = null;
+                      }
+                  }
+              }
+          }
+          EOF
+
+          if [ -f index.html ]; then
+            cp index.html app/assets/index.html
+          else
+            echo '<!doctype html><html><body style="background:#000"></body></html>' > app/assets/index.html
+          fi
+          PAGE_URL="https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/${GITHUB_REF_NAME}/index.html"
+          sed -i "s#__PAGE_URL__#${PAGE_URL}#" app/src/io/github/semesterwallpaper/WallpaperSvc.java
+          echo "The app will read: ${PAGE_URL}"
+
+      - name: Get the signing key
+        run: |
+          if [ ! -f wallpaper-key.p12 ]; then
+            keytool -genkeypair -keystore wallpaper-key.p12 -storetype PKCS12 \
+              -storepass semester -keypass semester -alias wallpaper \
+              -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Semester Wallpaper"
+            echo "NEW_KEY=1" >> "$GITHUB_ENV"
+          fi
+
+      - name: Build the APK
+        run: |
+          SDK="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
+          SM="$(ls -d "$SDK"/cmdline-tools/*/bin/sdkmanager | sort -V | tail -n 1)"
+          echo "Using $SM"
+          yes | "$SM" --licenses > /dev/null || true
+          "$SM" "platforms;android-34" "build-tools;34.0.0" > /dev/null
+          BT="$SDK/build-tools/34.0.0"
+          JAR="$SDK/platforms/android-34/android.jar"
+          cd app
+          mkdir -p build/compiled build/classes
+          for f in $(find res -type f); do
+            "$BT/aapt2" compile -o build/compiled "$f"
+          done
+          "$BT/aapt2" link -o build/base.apk -I "$JAR" --manifest AndroidManifest.xml -A assets \
+            --min-sdk-version 26 --target-sdk-version 34 \
+            --version-code "$GITHUB_RUN_NUMBER" --version-name "1.$GITHUB_RUN_NUMBER" \
+            build/compiled/*.flat
+          javac -source 8 -target 8 -bootclasspath "$JAR" -encoding UTF-8 -d build/classes \
+            $(find src -name '*.java')
+          "$BT/d8" --release --min-api 26 --lib "$JAR" --output build $(find build/classes -name '*.class')
+          (cd build && zip -q -u base.apk classes.dex)
+          "$BT/zipalign" -f -p 4 build/base.apk build/aligned.apk
+          "$BT/apksigner" sign --ks ../wallpaper-key.p12 --ks-pass pass:semester --key-pass pass:semester \
+            --ks-key-alias wallpaper --out ../semester-wallpaper.apk build/aligned.apk
+          "$BT/apksigner" verify ../semester-wallpaper.apk
+          ls -l ../semester-wallpaper.apk
+
+      - name: Publish the APK
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "build-${GITHUB_RUN_NUMBER}" semester-wallpaper.apk \
+            --title "Semester wallpaper ${GITHUB_RUN_NUMBER}" \
+            --notes "Open this page on your phone and tap semester-wallpaper.apk to install it." \
+            --latest
+          if [ "${NEW_KEY:-0}" = "1" ]; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898283+github-actions[bot]@users.noreply.github.com"
+            git add wallpaper-key.p12
+            git commit -m "Save the signing key so updates install over the old app"
+            git push || echo "Could not save the signing key"
+          fi
