@@ -1,0 +1,683 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#ff0000">
+<title>Swiss red</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@300;500&display=swap" rel="stylesheet">
+<style>
+/* Day: red field, white type. Night: black field, red marks. Same in any viewer theme. */
+:root {
+  color-scheme: dark;
+  --field: #ff0000;
+  --ink: #ffffff;
+  --ink-2: rgba(255, 255, 255, 0.8);
+  --ink-3: rgba(255, 255, 255, 0.5);
+  --track: rgba(255, 255, 255, 0.26);
+  --rule: rgba(255, 255, 255, 0.24);
+  --mark: #ffffff;
+  --logo: #ffffff;
+  --fit: 1;
+  --pad: 7vw;
+  --dial: calc(min(54vw, 27dvh, 300px) * var(--fit));
+  --mini: calc(min(9.6vw, 4.6dvh, 46px) * var(--fit));
+  --top-space: 20dvh;
+  --bottom-space: 19dvh;
+  box-sizing: border-box;
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --ink: #ffffff; }
+}
+:root[data-theme="dark"] { --ink: #ffffff; }
+:root.night {
+  --field: #000000;
+  --mark: #ff0000;
+  --logo: #ff0000;
+  --ink-2: rgba(255, 255, 255, 0.62);
+  --ink-3: rgba(255, 255, 255, 0.34);
+  --track: rgba(255, 255, 255, 0.16);
+  --rule: rgba(255, 255, 255, 0.16);
+}
+
+html { scroll-padding-top: env(safe-area-inset-top, 0px); }
+html, body { height: 100%; margin: 0; }
+body {
+  background: var(--field);
+  color: var(--ink);
+  font-family: "Inter Tight", Arial, "Helvetica Neue", Helvetica, sans-serif;
+  font-weight: 300;
+  font-feature-settings: "tnum" 1;
+  font-variant-numeric: tabular-nums;
+  overflow: hidden;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  transition: background-color 60s linear;
+}
+#fx { position: fixed; inset: 0; z-index: 0; pointer-events: none; }
+
+#stage {
+  position: relative; z-index: 1;
+  height: 100%; max-width: 520px; margin: 0 auto;
+  padding: var(--top-space) var(--pad) var(--bottom-space);
+  box-sizing: border-box;
+  display: flex; flex-direction: column; justify-content: center;
+  gap: calc(3.4dvh * var(--fit));
+  transition: transform 6s linear;
+}
+#stage > * { flex-shrink: 0; }
+
+h2 {
+  margin: 0 0 calc(1.2dvh * var(--fit));
+  font-size: clamp(11px, 3vw, 13px); font-weight: 500; letter-spacing: 0.01em;
+  color: var(--ink-2);
+}
+
+/* Status */
+.status { display: flex; align-items: center; gap: 0.6em; font-size: clamp(11.5px, 3.2vw, 14px); font-weight: 500; color: var(--ink-2); }
+.status.live { color: var(--ink); }
+.status .sq { display: none; width: 0.55em; height: 0.55em; background: var(--mark); }
+.status.live .sq { display: block; animation: blink 1.6s steps(1) infinite; }
+
+/* Dial */
+.dial-row { display: flex; align-items: flex-end; gap: 5vw; }
+.dial { position: relative; width: var(--dial); height: var(--dial); flex: none; }
+.dial svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.dial .trk { fill: none; stroke: var(--track); stroke-width: 6; }
+.dial .prog { fill: none; stroke: var(--mark); stroke-width: 6; transition: stroke 60s linear; }
+.dial .tick { stroke: var(--ink-3); stroke-width: 0.5; }
+.dial .tick.major { stroke: var(--ink-2); stroke-width: 0.9; }
+.dial .needle { stroke: var(--ink); stroke-width: 0.9; }
+.dial-num {
+  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+  white-space: nowrap; line-height: 1;
+}
+.dial-num .i { font-size: calc(var(--dial) * 0.28); font-weight: 300; letter-spacing: -0.04em; }
+.dial-num .d, .dial-num .u { font-size: calc(var(--dial) * 0.082); font-weight: 300; color: var(--ink-2); align-self: flex-end; margin-bottom: calc(var(--dial) * 0.36); }
+.dial-num .d { margin-left: 0.15em; }
+.dial-num .u { margin-left: 0.2em; }
+
+.count { display: grid; gap: calc(0.4dvh * var(--fit)); padding-bottom: 0.2em; }
+.count div { display: flex; align-items: baseline; gap: 0.35em; line-height: 1; }
+.count .n { font-size: calc(var(--dial) * 0.13); font-weight: 300; min-width: 1.15em; }
+.count .unit { font-size: clamp(10px, 2.7vw, 12px); font-weight: 500; color: var(--ink-2); }
+.count .when { margin-top: 0.6em; font-size: clamp(10px, 2.7vw, 12px); font-weight: 500; color: var(--ink-2); }
+
+/* Courses */
+.minis { display: grid; grid-template-columns: repeat(6, 1fr); }
+.mini svg { display: block; width: var(--mini); height: var(--mini); overflow: visible; }
+.mini .trk { fill: none; stroke: var(--track); stroke-width: 9; }
+.mini .prog { fill: none; stroke: var(--mark); stroke-width: 9; transition: stroke 60s linear; }
+.mini .code { margin-top: 0.7em; font-size: clamp(10.5px, 2.9vw, 12.5px); font-weight: 500; }
+.mini .pct { margin-top: 0.15em; white-space: nowrap; font-size: clamp(11px, 3.1vw, 13px); }
+.mini .pct .d { font-size: 0.66em; color: var(--ink-2); }
+.mini.live .prog { animation: pulse 2s ease-in-out infinite; }
+.mini.live .pct .d { color: var(--ink); }
+.mini.done .pct { color: var(--ink-2); }
+
+/* Exams */
+.rows { border-top: 1px solid var(--rule); }
+.row {
+  display: grid; grid-template-columns: calc(var(--mini) * 0.5) 3.6em 4em 1fr auto;
+  align-items: center; column-gap: 0.7em;
+  padding: calc(0.75dvh * var(--fit)) 0; border-bottom: 1px solid var(--rule);
+  font-size: clamp(11px, 3.1vw, 13px); white-space: nowrap;
+}
+.row svg { display: block; width: calc(var(--mini) * 0.5); height: calc(var(--mini) * 0.5); overflow: visible; }
+.row .trk { fill: none; stroke: var(--track); stroke-width: 16; }
+.row .prog { fill: none; stroke: var(--mark); stroke-width: 16; transition: stroke 60s linear; }
+.row.deadline .trk { stroke-dasharray: 6 8; }
+.row .code { font-weight: 500; }
+.row .date { color: var(--ink-2); }
+.row .pct { text-align: right; }
+.row .pct .d { font-size: 0.72em; color: var(--ink-2); }
+.row.done { color: var(--ink-2); }
+.tbd { margin-top: calc(1.2dvh * var(--fit)); font-size: clamp(11px, 3.1vw, 13px); color: var(--ink-2); }
+.tbd:empty { display: none; }
+
+.logo {
+  width: calc(min(24vw, 12dvh, 130px) * var(--fit)); aspect-ratio: 480 / 140;
+  background-color: var(--logo); transition: background-color 60s linear;
+  -webkit-mask: url("data:image/png;base64,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") no-repeat 0 0 / contain;
+          mask: url("data:image/png;base64,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") no-repeat 0 0 / contain;
+}
+#night { position: fixed; inset: 0; z-index: 5; pointer-events: none; background: #000000; opacity: 0; transition: opacity 90s linear; }
+
+@keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.25; } }
+@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.55; } }
+@media (prefers-reduced-motion: reduce) {
+  .status.live .sq, .mini.live .prog { animation: none; }
+}
+:root[data-power="saver"] *, :root[data-power="saver"] *::before { animation-play-state: paused !important; }
+</style>
+</head>
+<body>
+<canvas id="fx" aria-hidden="true"></canvas>
+
+<main id="stage">
+  <div id="status" class="status"><span class="sq"></span><span id="statusText"></span></div>
+
+  <section aria-label="Time until the exam session">
+    <h2>Road to exams</h2>
+    <div class="dial-row">
+      <div class="dial">
+        <svg id="dialSvg" viewBox="0 0 120 120" aria-hidden="true">
+          <g id="ticks"></g>
+          <g transform="rotate(-90 60 60)">
+            <circle class="trk" cx="60" cy="60" r="50"/>
+            <circle class="prog" id="dialProg" cx="60" cy="60" r="50"/>
+            <line class="needle" id="needle" x1="60" y1="60" x2="60" y2="60"/>
+          </g>
+        </svg>
+        <div class="dial-num"><span class="i" id="hI">0</span><span class="d" id="hD">.000000</span><span class="u">%</span></div>
+      </div>
+      <div class="count">
+        <div><span class="n" id="cD">0</span><span class="unit">days</span></div>
+        <div><span class="n" id="cH">00</span><span class="unit">hours</span></div>
+        <div><span class="n" id="cM">00</span><span class="unit">minutes</span></div>
+        <div><span class="n" id="cS">00</span><span class="unit">seconds</span></div>
+        <div class="when" id="when"></div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Courses</h2>
+    <div id="classes" class="minis"></div>
+  </section>
+
+  <section>
+    <h2>Exams and deadlines</h2>
+    <div id="exams" class="rows"></div>
+    <div id="tbd" class="tbd"></div>
+  </section>
+
+  <div class="logo" role="img" aria-label="EPFL"></div>
+</main>
+
+<div id="night"></div>
+
+<script>
+/* =====================================================================
+   EDIT HERE: dates, timetable, exams, night mode
+   Dates: "YYYY-MM-DD" or "YYYY-MM-DDTHH:MM" (local time)
+   ===================================================================== */
+const CONFIG = {
+  countFrom: "2026-09-07T00:00",          // 0% point of every countdown
+  examSessionStart: "2027-01-11T00:00",   // the dial reaches 100% here
+
+  firstClassDay: "2026-09-07",
+  lastClassDay: "2026-12-18",
+  noClassDays: ["2026-09-21"],                    // Jeune federal
+  noClassRanges: [["2026-10-19", "2026-10-23"]],  // autumn break
+
+  courses: {
+    AN:   { name: "Analysis I" },
+    AL:   { name: "Linear Algebra" },
+    AICC: { name: "AICC I" },
+    PHYS: { name: "General physics: mechanics" },
+    PROG: { name: "Introduction to programming" },
+  },
+
+  timetable: [
+    { day: "Mon", start: "10:15", end: "12:00", course: "AN",   type: "Lecture" },
+    { day: "Tue", start: "08:15", end: "10:00", course: "AICC", type: "Lecture" },
+    { day: "Tue", start: "10:15", end: "12:00", course: "PHYS", type: "Exercise" },
+    { day: "Tue", start: "15:15", end: "17:00", course: "AL",   type: "Lecture" },
+    { day: "Wed", start: "10:15", end: "12:00", course: "AN",   type: "Lecture" },
+    { day: "Wed", start: "13:15", end: "14:00", course: "PROG", type: "Lecture" },
+    { day: "Wed", start: "14:15", end: "15:00", course: "PROG", type: "Lecture" },
+    { day: "Wed", start: "15:15", end: "17:00", course: "AICC", type: "Lecture" },
+    { day: "Wed", start: "17:15", end: "19:00", course: "PHYS", type: "Lecture" },
+    { day: "Thu", start: "08:15", end: "10:00", course: "AL",   type: "Lecture" },
+    { day: "Thu", start: "10:15", end: "12:00", course: "AN",   type: "Exercise" },
+    { day: "Thu", start: "12:15", end: "14:00", course: "PHYS", type: "Lecture" },
+    { day: "Fri", start: "08:15", end: "10:00", course: "AL",   type: "Exercise" },
+    { day: "Fri", start: "10:15", end: "12:00", course: "AICC", type: "Exercise" },
+    { day: "Fri", start: "13:15", end: "15:00", course: "PROG", type: "Exercise" },
+    { day: "Fri", start: "15:15", end: "16:00", course: "PROG", type: "Lab" },
+  ],
+
+  // date: null means "date not known yet"
+  exams: [
+    { label: "PROG", course: "PROG", date: "2026-12-12T09:00" },                      // exam 09:00-12:00
+    { label: "PROJ", course: "PROG", date: "2026-12-17T13:00", kind: "deadline" },    // project submission
+    { label: "DEF",  course: "PROG", date: "2026-12-18T08:00", kind: "deadline" },    // project defense (time TBD)
+    { label: "PHYS", course: "PHYS", date: "2027-01-15T08:00" },                      // exam 08:00-11:30
+    { label: "AN",   course: "AN",   date: null },
+    { label: "AL",   course: "AL",   date: null },
+    { label: "AICC", course: "AICC", date: null },
+  ],
+  tbdText: "in January",
+
+  nightDim: { from: "23:00", to: "07:00", brightness: 0.45 },
+  decimals: { big: 6, live: 6, small: 2, exams: 5 },  // live = the course you are in right now
+  particles: 60,
+
+  // free space left for the lock screen clock (top) and charging text / shortcuts (bottom)
+  layout: { topSpace: "20dvh", bottomSpace: "19dvh" },
+};
+/* ===================================================================== */
+
+(() => {
+  "use strict";
+  const $ = (id) => document.getElementById(id);
+
+  // Battery mode sent by the wallpaper app: "full", "eco" (half the motion) or "saver" (minimal).
+  let power = (window.__power && window.__power.mode) || "full";
+  document.documentElement.dataset.power = power;
+  window.addEventListener("wallpaper-power", (e) => {
+    power = (e.detail && e.detail.mode) || "full";
+    document.documentElement.dataset.power = power;
+  });
+  const powerShare = () => (power === "saver" ? 0.2 : power === "eco" ? 0.5 : 1);
+  const frameSkip = () => (power === "saver" ? 4 : power === "eco" || night ? 2 : 1);
+  const tickMs = () => (power === "saver" ? 500 : night ? 400 : power === "eco" ? 120 : 60);
+  const TAU = Math.PI * 2;
+  const pad = (n) => String(n).padStart(2, "0");
+  const clamp01 = (x) => Math.min(1, Math.max(0, x));
+  const root = document.documentElement;
+  root.style.setProperty("--top-space", CONFIG.layout.topSpace);
+  root.style.setProperty("--bottom-space", CONFIG.layout.bottomSpace);
+
+  const DAYNUM = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
+  const SDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  const SMONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+  function toTime(s) {
+    const [d, t] = s.split("T");
+    const [y, m, dd] = d.split("-").map(Number);
+    const [hh, mm] = (t || "00:00").split(":").map(Number);
+    return new Date(y, m - 1, dd, hh, mm, 0, 0).getTime();
+  }
+  const ymd = (dt) => `${dt.getFullYear()}-${pad(dt.getMonth() + 1)}-${pad(dt.getDate())}`;
+  const hm = (t) => { const d = new Date(t); return `${pad(d.getHours())}:${pad(d.getMinutes())}`; };
+  const shortDate = (t) => { const d = new Date(t); return `${d.getDate()} ${SMONTHS[d.getMonth()]}`; };
+
+  /* ---------- schedule ---------- */
+  const START = toTime(CONFIG.countFrom);
+  const SESSION = toTime(CONFIG.examSessionStart);
+  const off = new Set(CONFIG.noClassDays);
+  for (const [a, b] of CONFIG.noClassRanges) {
+    const d = new Date(toTime(a)); const end = toTime(b);
+    while (d.getTime() <= end) { off.add(ymd(d)); d.setDate(d.getDate() + 1); }
+  }
+  const sessions = [];
+  {
+    const d = new Date(toTime(CONFIG.firstClassDay));
+    const last = toTime(CONFIG.lastClassDay);
+    while (d.getTime() <= last) {
+      if (!off.has(ymd(d))) {
+        for (const s of CONFIG.timetable) {
+          if (DAYNUM[s.day] !== d.getDay()) continue;
+          const [sh, sm] = s.start.split(":").map(Number);
+          const [eh, em] = s.end.split(":").map(Number);
+          sessions.push({
+            course: s.course, type: s.type,
+            start: new Date(d.getFullYear(), d.getMonth(), d.getDate(), sh, sm).getTime(),
+            end: new Date(d.getFullYear(), d.getMonth(), d.getDate(), eh, em).getTime(),
+          });
+        }
+      }
+      d.setDate(d.getDate() + 1);
+    }
+  }
+  sessions.sort((a, b) => a.start - b.start);
+  const totals = {};
+  for (const s of sessions) totals[s.course] = (totals[s.course] || 0) + (s.end - s.start);
+  function courseProgress(code, now) {
+    let done = 0;
+    for (const s of sessions) {
+      if (s.course !== code) continue;
+      if (now >= s.end) done += s.end - s.start;
+      else if (now > s.start) done += now - s.start;
+    }
+    return totals[code] ? done / totals[code] : 0;
+  }
+
+  /* ---------- helpers ---------- */
+  const setText = (node, text) => { if (node && node.textContent !== text) node.textContent = text; };
+  function setPct(iNode, dNode, p, dec, unit) {
+    if (p >= 1) { setText(iNode, "100"); setText(dNode, unit); return; }
+    const v = (clamp01(p) * 100).toFixed(dec);
+    const k = v.indexOf(".");
+    setText(iNode, k < 0 ? v : v.slice(0, k));
+    setText(dNode, (k < 0 ? "" : v.slice(k)) + unit);
+  }
+  function remShort(ms) {
+    let s = Math.max(0, Math.floor(ms / 1000));
+    const d = Math.floor(s / 86400); s %= 86400;
+    const h = Math.floor(s / 3600); s %= 3600;
+    const m = Math.floor(s / 60);
+    if (d > 0) return `${d} d ${h} h`;
+    if (h > 0) return `${h} h ${pad(m)} m`;
+    return `${m} m`;
+  }
+  const ns = "http://www.w3.org/2000/svg";
+  function ringSvg(r) {
+    const C = TAU * r;
+    return {
+      C,
+      html: `<svg viewBox="0 0 120 120" aria-hidden="true"><g transform="rotate(-90 60 60)">
+        <circle class="trk" cx="60" cy="60" r="${r}"/>
+        <circle class="prog" cx="60" cy="60" r="${r}" stroke-dasharray="${C} ${C}" stroke-dashoffset="${C}"/></g></svg>`,
+    };
+  }
+  function setRing(t, p) {
+    if (Math.abs(p - t.lastP) < 0.0008 && !(p >= 1 && t.lastP < 1)) return;
+    t.lastP = p;
+    t.prog.setAttribute("stroke-dashoffset", (t.C * (1 - p)).toFixed(3));
+    t.prog.style.visibility = p <= 0 ? "hidden" : "visible";
+  }
+
+  /* ---------- dial ---------- */
+  {
+    const g = $("ticks");
+    for (let k = 0; k < 40; k++) {
+      const a = -Math.PI / 2 + (k / 40) * TAU;
+      const major = k % 10 === 0;
+      const r1 = major ? 55.5 : 56.8, r2 = 59.5;
+      const l = document.createElementNS(ns, "line");
+      l.setAttribute("x1", (60 + r1 * Math.cos(a)).toFixed(2));
+      l.setAttribute("y1", (60 + r1 * Math.sin(a)).toFixed(2));
+      l.setAttribute("x2", (60 + r2 * Math.cos(a)).toFixed(2));
+      l.setAttribute("y2", (60 + r2 * Math.sin(a)).toFixed(2));
+      l.setAttribute("class", major ? "tick major" : "tick");
+      g.appendChild(l);
+    }
+  }
+  const dial = { prog: $("dialProg"), C: TAU * 50, lastP: -1 };
+  dial.prog.setAttribute("stroke-dasharray", `${dial.C} ${dial.C}`);
+  const needle = $("needle");
+  const sd = new Date(SESSION);
+  $("when").textContent = `Session starts ${SDAYS[sd.getDay()]} ${sd.getDate()} ${SMONTHS[sd.getMonth()]}`;
+
+  /* ---------- courses ---------- */
+  function makeMini(code) {
+    const r = ringSvg(46);
+    const el = document.createElement("div");
+    el.className = "mini";
+    el.innerHTML = `${r.html}<div class="code">${code}</div><div class="pct"><span class="i"></span><span class="d"></span></div>`;
+    $("classes").appendChild(el);
+    return { el, code, C: r.C, prog: el.querySelector(".prog"), i: el.querySelector(".i"), d: el.querySelector(".d"), lastP: -1 };
+  }
+  const allTile = makeMini("All");
+  const classTiles = Object.keys(CONFIG.courses).map(makeMini);
+  let liveTile = null;
+
+  /* ---------- exams ---------- */
+  const examList = CONFIG.exams
+    .map((x, idx) => ({ ...x, idx, t: x.date ? toTime(x.date) : null }))
+    .sort((a, b) => (a.t === null || b.t === null) ? (a.t === null) - (b.t === null) || a.idx - b.idx : a.t - b.t);
+  const examRows = examList.filter((x) => x.t !== null).map((x) => {
+    const r = ringSvg(44);
+    const el = document.createElement("div");
+    el.className = "row" + (x.kind === "deadline" ? " deadline" : "");
+    el.innerHTML = `${r.html}<span class="code">${x.label}</span><span class="date">${shortDate(x.t)}</span><span class="rem"></span><span class="pct"><span class="i"></span><span class="d"></span></span>`;
+    $("exams").appendChild(el);
+    return { el, target: x.t, C: r.C, prog: el.querySelector(".prog"), rem: el.querySelector(".rem"), i: el.querySelector(".pct .i"), d: el.querySelector(".pct .d"), lastP: -1 };
+  });
+  const tbd = examList.filter((x) => x.t === null).map((x) => x.label);
+  if (tbd.length) {
+    const names = tbd.length > 1 ? `${tbd.slice(0, -1).join(", ")} and ${tbd[tbd.length - 1]}` : tbd[0];
+    $("tbd").textContent = `${names} ${tbd.length > 1 ? "exams: dates" : "exam: date"} ${CONFIG.tbdText}`;
+  }
+
+  /* ---------- status line ---------- */
+  function whenLabel(t, now) {
+    const d = new Date(t), n = new Date(now);
+    const diff = Math.round((new Date(d.getFullYear(), d.getMonth(), d.getDate()) - new Date(n.getFullYear(), n.getMonth(), n.getDate())) / 86400000);
+    if (diff === 0) return `today ${hm(t)}`;
+    if (diff === 1) return `tomorrow ${hm(t)}`;
+    if (diff < 7) return `${SDAYS[d.getDay()]} ${hm(t)}`;
+    return `${SDAYS[d.getDay()]} ${shortDate(t)}, ${hm(t)}`;
+  }
+  function updateStatus(now, live) {
+    let text;
+    if (live) text = `${live.course} ${live.type.toLowerCase()} until ${hm(live.end)}`;
+    else {
+      const next = sessions.find((s) => s.start > now);
+      if (next) text = `Next: ${next.course} ${next.type.toLowerCase()}, ${whenLabel(next.start, now)}`;
+      else if (now < SESSION) text = `Classes are over. Exams start ${shortDate(SESSION)}.`;
+      else text = "Exam session. Good luck.";
+    }
+    setText($("statusText"), text);
+    $("status").classList.toggle("live", !!live);
+  }
+
+  /* ---------- night ---------- */
+  const minutesOf = (s) => { const [h, m] = s.split(":").map(Number); return h * 60 + m; };
+  let night = null;
+  function updateNight(d) {
+    const m = d.getHours() * 60 + d.getMinutes();
+    const f = minutesOf(CONFIG.nightDim.from), t = minutesOf(CONFIG.nightDim.to);
+    const n = f > t ? (m >= f || m < t) : (m >= f && m < t);
+    if (n !== night) {
+      night = n;
+      root.classList.toggle("night", n);
+      $("night").style.opacity = n ? String(1 - CONFIG.nightDim.brightness) : "0";
+    }
+  }
+
+  /* ---------- main update ---------- */
+  let dialP = 0, lastSecond = -1;
+  function update() {
+    const now = Date.now();
+
+    dialP = clamp01((now - START) / (SESSION - START));
+    setRing(dial, dialP);
+    setPct($("hI"), $("hD"), dialP, CONFIG.decimals.big, "");
+    const a = dialP * TAU;
+    needle.setAttribute("x1", (60 + 44 * Math.cos(a)).toFixed(2));
+    needle.setAttribute("y1", (60 + 44 * Math.sin(a)).toFixed(2));
+    needle.setAttribute("x2", (60 + 59.5 * Math.cos(a)).toFixed(2));
+    needle.setAttribute("y2", (60 + 59.5 * Math.sin(a)).toFixed(2));
+    let s = Math.max(0, Math.floor((SESSION - now) / 1000));
+    setText($("cD"), String(Math.floor(s / 86400))); s %= 86400;
+    setText($("cH"), pad(Math.floor(s / 3600))); s %= 3600;
+    setText($("cM"), pad(Math.floor(s / 60)));
+    setText($("cS"), pad(s % 60));
+
+    const live = sessions.find((x) => now >= x.start && now < x.end) || null;
+    liveTile = null;
+    let sum = 0;
+    for (const t of classTiles) {
+      const p = courseProgress(t.code, now);
+      const isLive = !!live && live.course === t.code;
+      sum += p;
+      setRing(t, p);
+      setPct(t.i, t.d, p, isLive ? CONFIG.decimals.live : CONFIG.decimals.small, "%");
+      t.el.classList.toggle("live", isLive);
+      t.el.classList.toggle("done", p >= 1);
+      if (isLive) liveTile = t;
+    }
+    const pAll = sum / classTiles.length;
+    setRing(allTile, pAll);
+    setPct(allTile.i, allTile.d, pAll, CONFIG.decimals.small, "%");
+    allTile.el.classList.toggle("done", pAll >= 1);
+
+    for (const t of examRows) {
+      const p = clamp01((now - START) / (t.target - START));
+      setRing(t, p);
+      setPct(t.i, t.d, p, CONFIG.decimals.exams, " %");
+      setText(t.rem, p >= 1 ? "Done" : remShort(t.target - now));
+      t.el.classList.toggle("done", p >= 1);
+    }
+
+    const sec = Math.floor(now / 1000);
+    if (sec !== lastSecond) {
+      lastSecond = sec;
+      updateStatus(now, live);
+      updateNight(new Date(now));
+    }
+  }
+  (function loop() { update(); setTimeout(loop, tickMs()); })();
+
+  /* ---------- burn-in protection: slow drift ---------- */
+  const stage = $("stage");
+  const driftAt = (t) => [Math.sin(t / 173) * 7, Math.cos(t / 241) * 9];
+  function drift() {
+    const [dx, dy] = driftAt(Date.now() / 1000);
+    stage.style.transform = `translate(${dx.toFixed(1)}px, ${dy.toFixed(1)}px)`;
+  }
+  drift(); setInterval(drift, 6000);
+
+  /* ---------- shrink a little if everything doesn't fit ---------- */
+  function fit() {
+    const cs = getComputedStyle(stage);
+    const kids = [...stage.children];
+    const used = () => kids.reduce((h, k) => h + k.offsetHeight, 0) + parseFloat(cs.rowGap || 0) * (kids.length - 1);
+    const avail = stage.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom);
+    let f = 1;
+    root.style.setProperty("--fit", "1");
+    while (f > 0.6 && used() > avail) { f -= 0.03; root.style.setProperty("--fit", f.toFixed(2)); }
+  }
+  fit();
+  window.addEventListener("resize", fit);
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(fit);
+
+  /* ---------- particles: a faint Swiss dot grid, square dust and sparks ---------- */
+  const cvs = $("fx");
+  const ctx = cvs.getContext("2d");
+  const reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const SP = 22;
+  let W = 0, H = 0;
+  let grid = null;
+  const anchor = { x: 0, y: 0, r: 0 };
+  let liveAnchor = null;
+
+  function makeGrid(color) {
+    const g = document.createElement("canvas");
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    g.width = Math.ceil((W + SP * 2) * dpr); g.height = Math.ceil((H + SP * 2) * dpr);
+    const c = g.getContext("2d");
+    c.scale(dpr, dpr);
+    c.fillStyle = color;
+    for (let x = 0; x < W + SP * 2; x += SP) for (let y = 0; y < H + SP * 2; y += SP) c.fillRect(x, y, 1.2, 1.2);
+    return g;
+  }
+  let gridNight = null;
+  function resize() {
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    W = window.innerWidth; H = window.innerHeight;
+    cvs.width = Math.round(W * dpr); cvs.height = Math.round(H * dpr);
+    cvs.style.width = W + "px"; cvs.style.height = H + "px";
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    grid = makeGrid("rgba(255,255,255,0.16)");
+    gridNight = makeGrid("rgba(255,255,255,0.08)");
+    measure();
+  }
+  function measure() {
+    const r = $("dialSvg").getBoundingClientRect();
+    anchor.x = r.left + r.width / 2; anchor.y = r.top + r.height / 2; anchor.r = r.width * 50 / 120;
+    if (liveTile) {
+      const rr = liveTile.el.querySelector("svg").getBoundingClientRect();
+      liveAnchor = { x: rr.left + rr.width / 2, y: rr.top + rr.height / 2, r: rr.width * 46 / 120 };
+    } else liveAnchor = null;
+  }
+  window.addEventListener("resize", resize);
+  setInterval(measure, 1000);
+
+  const colors = () => night ? ["#ffffff", "#ff0000", "#ff0000"] : ["#ffffff"];
+  const pick = (arr) => arr[(Math.random() * arr.length) | 0];
+  const dust = [];
+  function newDust(anyY) {
+    return {
+      x: Math.random() * W, y: anyY ? Math.random() * H : H + 8,
+      s: 1 + Math.random() * 1.8, vy: -(3 + Math.random() * 10),
+      sway: 3 + Math.random() * 12, ph: Math.random() * TAU, fs: 0.15 + Math.random() * 0.4,
+      a: 0.18 + Math.random() * 0.45, tw: 0.4 + Math.random() * 1.2, c: pick(colors()),
+    };
+  }
+  const twinkles = [];
+  const sparks = [];
+  function spark(x, y, vx, vy, life, s) {
+    if (sparks.length < 200) sparks.push({ x, y, vx, vy, life, t: 0, s, c: pick(colors()) });
+  }
+
+  let last = 0, frameNo = 0, tipAcc = 0, liveAcc = 0;
+  function frame(ts) {
+    requestAnimationFrame(frame);
+    frameNo++;
+    if (frameNo % frameSkip()) return; // fewer frames at night and on low battery
+    const dt = last ? Math.min(0.05, (ts - last) / 1000) : 0.016;
+    last = ts;
+    const t = ts / 1000;
+    if (!W) return;
+    ctx.clearRect(0, 0, W, H);
+
+    // dot grid, drifting with the layout
+    const [dx, dy] = driftAt(Date.now() / 1000);
+    const ox = ((dx % SP) + SP) % SP - SP, oy = ((dy % SP) + SP) % SP - SP;
+    ctx.globalAlpha = 1;
+    ctx.drawImage(night ? gridNight : grid, ox, oy, W + SP * 2, H + SP * 2);
+
+    // grid points that light up for a moment
+    if (!reduce && power !== "saver" && twinkles.length < 22 && Math.random() < dt * 9) {
+      twinkles.push({ i: (Math.random() * (W / SP + 2)) | 0, j: (Math.random() * (H / SP + 2)) | 0, t: 0, life: 1.6 + Math.random() * 2.2, c: pick(colors()) });
+    }
+    for (let k = twinkles.length - 1; k >= 0; k--) {
+      const w = twinkles[k];
+      w.t += dt;
+      if (w.t >= w.life) { twinkles.splice(k, 1); continue; }
+      const q = Math.sin(Math.PI * w.t / w.life);
+      ctx.globalAlpha = 0.85 * q;
+      ctx.fillStyle = w.c;
+      const sz = 1.2 + 1.8 * q;
+      ctx.fillRect(ox + w.i * SP + 0.6 - sz / 2, oy + w.j * SP + 0.6 - sz / 2, sz, sz);
+    }
+
+    // square dust
+    const want = Math.round((reduce ? CONFIG.particles / 3 : CONFIG.particles) * powerShare());
+    while (dust.length < want) dust.push(newDust(true));
+    if (dust.length > want) dust.length = want;
+    for (const p of dust) {
+      p.y += p.vy * dt;
+      if (p.y < -10) Object.assign(p, newDust(false));
+      const x = p.x + Math.sin(t * p.fs + p.ph) * p.sway;
+      ctx.globalAlpha = p.a * (0.55 + 0.45 * Math.sin(t * p.tw + p.ph));
+      ctx.fillStyle = p.c;
+      ctx.fillRect(x, p.y, p.s, p.s);
+    }
+
+    // sparks from the needle tip and around the course you are in
+    if (!reduce && power !== "saver" && anchor.r && dialP > 0 && dialP < 1) {
+      tipAcc += dt * 4;
+      while (tipAcc >= 1) {
+        tipAcc -= 1;
+        const a = -Math.PI / 2 + dialP * TAU;
+        const R = anchor.r * 1.19;
+        const sp = 6 + Math.random() * 16, dir = a + (Math.random() - 0.5) * 1.2;
+        spark(anchor.x + Math.cos(a) * R, anchor.y + Math.sin(a) * R, Math.cos(dir) * sp, Math.sin(dir) * sp, 1 + Math.random() * 1.4, 1.2 + Math.random() * 1.6);
+      }
+    }
+    if (!reduce && power !== "saver" && liveAnchor) {
+      liveAcc += dt * 9;
+      while (liveAcc >= 1) {
+        liveAcc -= 1;
+        const a = Math.random() * TAU, sp = 6 + Math.random() * 14;
+        spark(liveAnchor.x + Math.cos(a) * liveAnchor.r, liveAnchor.y + Math.sin(a) * liveAnchor.r, Math.cos(a) * sp, Math.sin(a) * sp - 6, 0.9 + Math.random(), 1.2 + Math.random() * 1.4);
+      }
+    }
+    for (let k = sparks.length - 1; k >= 0; k--) {
+      const s = sparks[k];
+      s.t += dt;
+      if (s.t >= s.life) { sparks.splice(k, 1); continue; }
+      s.x += s.vx * dt; s.y += s.vy * dt;
+      ctx.globalAlpha = 0.9 * (1 - s.t / s.life);
+      ctx.fillStyle = s.c;
+      ctx.fillRect(s.x, s.y, s.s, s.s);
+    }
+    ctx.globalAlpha = 1;
+  }
+  resize();
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

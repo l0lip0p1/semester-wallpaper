@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#000000">
-<title>Semester wallpaper</title>
+<title>Neon</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Martian+Mono:wdth,wght@75..112.5,100..800&display=swap" rel="stylesheet">
@@ -162,6 +162,7 @@ body {
   .hero .orbit, .tile.tbd .spin, .hero .tip-halo { animation: none; }
   .tile.live .glow { animation: none; opacity: 0.95; }
 }
+:root[data-power="saver"] *, :root[data-power="saver"] *::before { animation-play-state: paused !important; }
 </style>
 </head>
 <body>
@@ -301,6 +302,17 @@ const CONFIG = {
 (() => {
   "use strict";
   const $ = (id) => document.getElementById(id);
+
+  // Battery mode sent by the wallpaper app: "full", "eco" (half the motion) or "saver" (minimal).
+  let power = (window.__power && window.__power.mode) || "full";
+  document.documentElement.dataset.power = power;
+  window.addEventListener("wallpaper-power", (e) => {
+    power = (e.detail && e.detail.mode) || "full";
+    document.documentElement.dataset.power = power;
+  });
+  const powerShare = () => (power === "saver" ? 0.2 : power === "eco" ? 0.5 : 1);
+  const frameSkip = () => (power === "saver" ? 4 : power === "eco" || night ? 2 : 1);
+  const tickMs = () => (power === "saver" ? 500 : night ? 400 : power === "eco" ? 120 : 60);
   document.documentElement.style.setProperty("--top-space", CONFIG.layout.topSpace);
   document.documentElement.style.setProperty("--bottom-space", CONFIG.layout.bottomSpace);
   const TAU = Math.PI * 2;
@@ -580,7 +592,7 @@ const CONFIG = {
       updateNight(dNow);
     }
   }
-  (function loop() { update(); setTimeout(loop, night ? 400 : 60); })();
+  (function loop() { update(); setTimeout(loop, tickMs()); })();
 
   /* ---------- burn-in protection: slow drift ---------- */
   const stage = $("stage");
@@ -684,13 +696,15 @@ const CONFIG = {
   function frame(ts) {
     requestAnimationFrame(frame);
     frameNo++;
-    if (night && frameNo % 2) return; // every frame by day, every other frame at night
+    if (frameNo % frameSkip()) return; // fewer frames at night and on low battery
     const dt = last ? Math.min(0.05, (ts - last) / 1000) : 0.016;
     last = ts;
     const t = ts / 1000;
     if (!W) return;
 
-    while (dust.length < nDust) dust.push(newDust(true));
+    const want = Math.round(nDust * powerShare());
+    while (dust.length < want) dust.push(newDust(true));
+    if (dust.length > want) dust.length = want;
 
     ctx.clearRect(0, 0, W, H);
     ctx.globalCompositeOperation = "lighter";
@@ -704,7 +718,7 @@ const CONFIG = {
     }
 
     if (anchor.r) {
-      for (const o of orbit) {
+      for (const o of orbit.slice(0, Math.round(orbit.length * powerShare()))) {
         o.ang += o.w * dt;
         const R = anchor.r * (o.off + Math.sin(t * 0.6 + o.wob) * 0.02);
         const x = anchor.x + Math.cos(o.ang) * R, y = anchor.y + Math.sin(o.ang) * R;
@@ -712,7 +726,7 @@ const CONFIG = {
         ctx.drawImage(sprite(o.c), x - o.s / 2, y - o.s / 2, o.s, o.s);
       }
       // sparks leaving the tip of the big ring
-      if (heroP > 0 && heroP < 1 && !reduce) {
+      if (heroP > 0 && heroP < 1 && !reduce && power !== "saver") {
         tipAcc += dt * 6;
         while (tipAcc >= 1) {
           tipAcc -= 1;
@@ -725,7 +739,7 @@ const CONFIG = {
     }
 
     // sparks around the course you are in right now
-    if (liveAnchor && !reduce) {
+    if (liveAnchor && !reduce && power !== "saver") {
       liveAcc += dt * 18;
       while (liveAcc >= 1) {
         liveAcc -= 1;
